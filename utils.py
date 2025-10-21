@@ -1,4 +1,4 @@
-
+import numpy as np
 
 def string_to_bitstream(message: str) -> list[bool] | None:
     """
@@ -62,13 +62,12 @@ def list8bit_to_char(array: list[bool]) -> str:
     # Converts binary -> decimal -> ASCII
     return chr(int(auxstr, 2))
 
+def samples_addnoise(samples: list[float], *, average: float = 0, spread: float = 1) -> list[float]:
+    """
+    Adds noise into a sample list. Noise is normal based, average
+    and spread can be included as parameters.
+    """
 
-
-if __name__ == "__main__":
-    test: str = "Test a message here."
-
-    result: list[bool] | None = string_to_bitstream(test)
-    if result:
-        print(bitstream_to_string(result))
-    else:
-        print("Incorrect message encoding! Please use only ASCII characters.")
+    # Uses numpy's list comprehension to add some noise to every value at once
+    result: np.array = samples + np.random.default_rng().normal(average, spread, len(samples))
+    return result.tolist()
