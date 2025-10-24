@@ -91,7 +91,7 @@ def ASK_modulation(digitals: list[bool], *,
                     smplcnt: int = 220, 
                     f: float = 100, 
                     amp: float = 500,
-                    reverse: bool = False) -> npt.NDArray:
+                    lowwave: bool = False) -> npt.NDArray:
     """
     Modulation of a digital signal via Amplitude Shift Keying. In this case, it
     will modulate 1s as the wave's normal amplitude and 0s are silence.
@@ -102,12 +102,14 @@ def ASK_modulation(digitals: list[bool], *,
     :type smplcnt: int
     :param f: Frequency of the wave in Hz. In ASK, this is equivalent to the frequency of the channel
     :type f: float
-    :param reverse: Reverse behaviour (0 waves and 1 silence)
-    :type reverse: bool
+    :param amp: Amplitude of the wave
+    :type amp: float
+    :param lowwave: Reverse behaviour (0 waves and 1 silence)
+    :type lowwave: bool
     """
 
     # Basic variables
-    keyed: npt.NDArray = np.empty(0)
+    result: npt.NDArray = np.empty(0)
     period: np.float64 = np.pi * 2 * f
     
     # Precalculations for faster performance
@@ -119,15 +121,15 @@ def ASK_modulation(digitals: list[bool], *,
     # Signal creation
     for b in digitals:
         # Checks if b is 0/1, then reverses the option if such has been requested
-        keyed = np.append(keyed, rOne if (b ^ reverse) else rZero)
+        result = np.append(result, rOne if (b ^ lowwave) else rZero)
     
-    return keyed
+    return result
 
 def ASK_demodulation(signal: npt.NDArray, *, 
                     smplcnt: int = 220, 
                     f: float = 100,
                     amp: float = 500,
-                    reverse: bool = False) -> list[bool]:
+                    lowwave: bool = False) -> list[bool]:
     """
     Demodulation of a digital signal modulated by Amplitude Shift Keying.
     It checks both possible outputs depending on the parameters and decides
@@ -135,12 +137,14 @@ def ASK_demodulation(signal: npt.NDArray, *,
 
     :param signal: Analogic signal (voltage samples)
     :type signal: npt.NDArray
-    :param smplcnt: Amount of samples per byte of digital signal. Recommended at least 2*f but not a multiple of f
+    :param smplcnt: Amount of samples per byte of digital signal
     :type smplcnt: int
     :param f: Frequency of the wave in Hz. In ASK, this is equivalent to the frequency of the channel
     :type f: float
-    :param reverse: Reverse behaviour (0 waves and 1 silence)
-    :type reverse: bool
+    :param amp: Amplitude of the wave
+    :type amp: float
+    :param lowwave: Reverse behaviour (0 waves and 1 silence)
+    :type lowwave: bool
     """
 
     # Precalculations for faster performance
@@ -159,13 +163,91 @@ def ASK_demodulation(signal: npt.NDArray, *,
         absdiffZero: np.float64 = np.sum(np.abs(signal[i:i+smplcnt] - eZero))
 
         # Decides result based on which has least error
-        result.append(bool(absdiffOne < absdiffZero) ^ reverse)
+        result.append(bool(absdiffOne < absdiffZero) ^ lowwave)
     
     return result
 
+def FSK_modulation(digitals: list[bool],
+                    keys: tuple[float, float], *, 
+                    smplcnt: int = 990,
+                    amp: float = 500) -> npt.NDArray:
+    """
+    Modulation of a digital signal via Frequency Shift Keying. In this case, it
+    will modulate based on the keys parameter: 0s will have waves of frequency
+    keys[0] and 1s will have keys[1] as the frequency.
+
+    :param digitals: Digital signal (bit stream)
+    :type digitals: list[bool]
+    :param keys: Frequency of wach wave in Hz
+    :type keys: float
+    :param smplcnt: Amount of samples per byte of digital signal. \
+        Recommended at least two times the highest frequency, but not a multiple of either one.
+    :type smplcnt: int
+    :param amp: Amplitude of the wave
+    :type amp: float
+    """
+
+    # Basic variables
+    result: npt.NDArray = np.empty(0)
+    periodZero: np.float64 = np.pi * 2 * keys[0]
+    periodOne: np.float64 = np.pi * 2 * keys[1]
+    
+    # Precalculations for faster performance
+    # Creates a list of smplcnt values from 0 to 2πf then makes it a wave
+    rZero: npt.NDArray = np.sin(np.arange(0, periodZero, periodZero / smplcnt)) * amp
+    rOne: npt.NDArray = np.sin(np.arange(0, periodOne, periodOne / smplcnt)) * amp
+
+    # Signal creation
+    for b in digitals:
+        # Checks if b is 0/1, adds the correct wave to samples
+        result = np.append(result, rOne if b else rZero)
+    
+    return result
+
+def FSK_demodulation(signal: npt.NDArray,
+                    keys: tuple[float, float], *, 
+                    smplcnt: int = 220, 
+                    amp: float = 500) -> list[bool]:
+    """
+    Demodulation of a digital signal modulated by Frequency Shift Keying.
+    It checks both possible outputs depending on the parameters and decides
+    whichever one has least error as the correct value of the bit.
+
+    :param signal: Analogic signal (voltage samples)
+    :type signal: npt.NDArray
+    :param smplcnt: Amount of samples per byte of digital signal
+    :type smplcnt: int
+    :param keys: Frequency of wach wave in Hz
+    :type keys: float
+    :param amp: Amplitude of the wave
+    :type amp: float
+    """
+
+    # Precalculations for faster performance
+    periodZero: np.float64 = np.pi * 2 * keys[0]
+    periodOne: np.float64 = np.pi * 2 * keys[1]
+    # Expected "0" wave
+    eZero: npt.NDArray = np.sin(np.arange(0, periodZero, periodZero / smplcnt)) * amp
+    # Expected "1" wave
+    eOne: npt.NDArray = np.sin(np.arange(0, periodOne, periodOne / smplcnt)) * amp
+
+    # Iterates through chunks of samples for each bit
+    result: list[bool] = []
+    for i in range(0, len(signal), smplcnt):
+        # Checks the absolute difference between each sample of the passed
+        # signal and the expected 0 and 1 waves.
+        absdiffOne: np.float64 = np.sum(np.abs(signal[i:i+smplcnt] - eOne))
+        absdiffZero: np.float64 = np.sum(np.abs(signal[i:i+smplcnt] - eZero))
+
+        # Decides result based on which has least error
+        result.append(bool(absdiffOne < absdiffZero))
+    
+    return result
+
+
 if __name__ == "__main__":
-    message = "hi"
+    message = "long message"
     print(message)
-    signal = ASK_modulation(string_to_bitstream(message))
-    signal = samples_addnoise(signal, spread=1000)
-    print(bitstream_to_string(ASK_demodulation(signal)))
+    signal = FSK_modulation(string_to_bitstream(message), (100, 433), smplcnt=990)
+    signal = samples_addnoise(signal, spread=1500)
+    print(bitstream_to_string(FSK_demodulation(signal, (100, 433), smplcnt=990)))
