@@ -283,14 +283,65 @@ def parity_check(digitals: list[bool], *,
     # Verify parity
     return not (bool(ones % 2) ^ odd)
 
+def BPSK_modulation(digitals: list[bool], *, 
+                    f: float = 100,
+                    smplcnt: int = 220,
+                    amp: float = 500) -> npt.NDArray:
+
+    # Basic variables
+    result: npt.NDArray = np.empty(0)
+    phases: tuple[float, float] = (0, np.pi)
+    period: float = 2 * np.pi * f
+    
+    # Precalculations for faster performance
+    # Creates a list of smplcnt values from 0 to 2πf then makes it a wave
+    rZero: npt.NDArray = np.sin(np.arange(0, period, period / smplcnt) + phases[0]) * amp
+    rOne: npt.NDArray = np.sin(np.arange(0, period, period / smplcnt) + phases[1]) * amp
+
+    # Signal creation
+    for b in digitals:
+        # Checks if b is 0/1, adds the correct wave to samples
+        result = np.append(result, rOne if b else rZero)
+    
+    return result
+
+def BPSK_demodulation(signal: npt.NDArray, *,
+                    f: float = 100,
+                    smplcnt: int = 220,
+                    amp: float = 500) -> list[bool]:
+    
+    # Basic variables
+    phases: tuple[float, float] = (0, np.pi)
+    period: float = 2 * np.pi * f
+
+    # Precalculations for faster performance
+    # Creates a list of each possible expected wave
+    e0: npt.NDArray = np.sin(np.arange(0, period, period / smplcnt) + phases[0]) * amp
+    e1: npt.NDArray = np.sin(np.arange(0, period, period / smplcnt) + phases[1]) * amp
+
+    # Iterates through chunks of samples for each bit
+    result: list[bool] = []
+    for i in range(0, len(signal), smplcnt):
+        # Checks the absolute difference between each sample of the passed
+        # signal and the expected 0 and 1 waves.
+        absdiff1: np.float64 = np.sum(np.abs(signal[i:i+smplcnt] - e1))
+        absdiff0: np.float64 = np.sum(np.abs(signal[i:i+smplcnt] - e0))
+
+        # Decides result based on which has least error
+        result.append(bool(absdiff1 < absdiff0))
+
+    return result
+
+
+
 if __name__ == "__main__":
     message = "long message that is really prone to errors"
     og = message
     message = string_to_bitstream(message)
     message = parity_insert(message)
-    message = FSK_modulation(message, (200, 450))
-    message = samples_addnoise(message, spread=2500)
-    message = FSK_demodulation(message, (200, 450))
+    message = BPSK_modulation(message)
+    message = samples_addnoise(message, spread=1500)
+    message = BPSK_demodulation(message)
     if (parity_check(message)):
         message = bitstream_to_string(message[:-1])
         if (og != message): print("Error undetected!")
