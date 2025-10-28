@@ -206,7 +206,7 @@ def FSK_modulation(digitals: list[bool],
 
 def FSK_demodulation(signal: npt.NDArray,
                     keys: tuple[float, float], *, 
-                    smplcnt: int = 220, 
+                    smplcnt: int = 990, 
                     amp: float = 500) -> list[bool]:
     """
     Demodulation of a digital signal modulated by Frequency Shift Keying.
@@ -244,10 +244,57 @@ def FSK_demodulation(signal: npt.NDArray,
     
     return result
 
+def parity_insert(digitals: list[bool], *,
+                odd: bool = False) -> list[bool]:
+    """
+    Inserts a parity bit at the end of a digital signal.
+    Returns the new digital signal with parity added at its trail.
+
+    :param digitals: The digital signal
+    :type digitals: list[bool]
+    :param odd: Odd parity
+    :type odd: bool
+    """
+
+    # Count how many 1s (Trues) are in the signal
+    ones: int = sum(digitals)
+
+    # Append parity bit, respecting odd-ness choice
+    digitals.append(bool(ones % 2) ^ odd)
+
+    # Return new list
+    return digitals
+
+def parity_check(digitals: list[bool], *,
+                odd: bool = False) -> bool:
+    """
+    Checks the parity of a given digital signal.
+    Returns True if no error is detected, and False if it is.
+
+    :param digitals: The digital signal
+    :type digitals: list[bool]
+    :param odd: Odd parity
+    :type odd: bool
+    """
+
+    # Count how many 1s (Trues) are in the signal
+    ones: int = sum(digitals)
+
+    # Verify parity
+    return not (bool(ones % 2) ^ odd)
 
 if __name__ == "__main__":
-    message = "long message"
-    print(message)
-    signal = FSK_modulation(string_to_bitstream(message), (100, 433), smplcnt=990)
-    signal = samples_addnoise(signal, spread=1500)
-    print(bitstream_to_string(FSK_demodulation(signal, (100, 433), smplcnt=990)))
+    message = "long message that is really prone to errors"
+    og = message
+    message = string_to_bitstream(message)
+    message = parity_insert(message)
+    message = FSK_modulation(message, (200, 450))
+    message = samples_addnoise(message, spread=2500)
+    message = FSK_demodulation(message, (200, 450))
+    if (parity_check(message)):
+        message = bitstream_to_string(message[:-1])
+        if (og != message): print("Error undetected!")
+        print(message)
+    else:
+        print("Error on message!")
+        print(bitstream_to_string(message[:-1]))
