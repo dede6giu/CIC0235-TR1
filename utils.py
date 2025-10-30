@@ -87,6 +87,10 @@ def samples_addnoise(samples: npt.NDArray, *, average: float = 0, spread: float 
     result: npt.NDArray = samples + np.random.default_rng().normal(average, spread, len(samples))
     return result
 
+def logmsg(message: str) -> None:
+    with open("log.txt", "a") as f:
+        f.write(message)
+        f.write('\n')
 
 # if __name__ == "__main__":
 #     message = "long message that is really prone to errors"
