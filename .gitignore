@@ -1,3 +1,10 @@
+### REPO SCPECIFIC ###
+log.txt
+test.txt
+
+
+### PYTHON GENERIC ###
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
