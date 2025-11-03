@@ -208,3 +208,217 @@ def BPSK_demodulation(signal: npt.NDArray, *,
 
     return result
 
+
+
+def coder(bit_string: list[bool], tipo_modulacao: str) -> list[int]:
+    """
+    Transmission of a digital bit sequence using one of three modulation types:
+    NRZ-Polar, Manchester, or Bipolar (AMI). Converts the binary sequence into
+    an equivalent analog signal representation.
+
+    :param bit_string: Input digital bit sequence (True/False for 1/0)
+    :type bit_string: list[bool]
+    :param tipo_modulacao: Type of digital modulation ("NRZ", "Manchester" or "Bipolar")
+    :type tipo_modulacao: str
+    :return: Encoded signal represented as a list of integer voltage levels
+    :rtype: list[int]
+    """
+
+    if tipo_modulacao == "NRZ":
+        return nrz_polar(bit_string)
+      
+    if tipo_modulacao == "Manchester":
+        return manchester(bit_string)
+      
+    if tipo_modulacao == "Bipolar": 
+        return bipolar(bit_string)
+    
+    print("Tipo de modulação não suportado")
+
+
+
+def nrz_polar(bit_string: list[bool]) -> list[int]:
+    """
+    Encodes bits using Non-Return-to-Zero Polar (NRZ-Polar) modulation.
+    Converts logical values to voltage levels:
+      - True  → +1V
+      - False → -1V
+
+    :param bit_string: Input digital bit sequence (True/False for 1/0)
+    :type bit_string: list[bool]
+    :return: List of integer voltage levels (+1 or -1)
+    :rtype: list[int]
+    """
+
+    sinal_codificado = []
+
+    for bit in bit_string:
+        if bit :
+            sinal_codificado.append(1)
+
+        else:
+            sinal_codificado.append(-1)
+
+    return sinal_codificado
+
+
+
+def manchester(bit_string: list[bool]) -> list[int]:
+    """
+    Encodes bits using Manchester modulation.
+    Each bit is represented by two voltage transitions:
+      - False (0) → [1, 0]
+      - True  (1) → [0, 1]
+    The mid-bit transition provides clock synchronization.
+
+    :param bit_string: Input digital bit sequence (True/False for 1/0)
+    :type bit_string: list[bool]
+    :return: List of integer voltage levels representing the Manchester signal
+    :rtype: list[int]
+    """
+
+    sinal_codificado = []
+    clock = [0,1]
+
+    for bit in bit_string:
+        sinal_codificado.append(clock[0]^bit)
+        sinal_codificado.append(clock[1]^bit)
+
+    return sinal_codificado
+
+
+def bipolar(bit_string: list[bool]) -> list[int]:
+    """
+    Encodes bits using Bipolar (Alternate Mark Inversion - AMI) modulation.
+    Logic 1 alternates between +1V and -1V to reduce DC component,
+    while logic 0 remains at 0V.
+
+    :param bit_string: Input digital bit sequence (True/False for 1/0)
+    :type bit_string: list[bool]
+    :return: List of integer voltage levels representing the Bipolar signal
+    :rtype: list[int]
+    """
+  
+
+    sinal_codificado = []
+    aux = 1 
+
+    for bit in bit_string:
+        if not bit:
+            sinal_codificado.append(0)
+        else:
+            sinal_codificado.append(aux)
+            aux = -aux  # alternate polarity for each '1'
+
+    return sinal_codificado
+
+
+
+
+# --------------------------------------------------------------------
+#                          DECODERS
+# --------------------------------------------------------------------
+
+def decoder(bit_string: list[int], tipo_modulacao: str) -> list[bool]:
+    """
+    Decodes a digital signal previously modulated using NRZ-Polar, Manchester, or Bipolar.
+    Restores the original bit sequence from the received signal.
+
+    :param bit_string: Encoded signal as a list of integer voltage levels
+    :type bit_string: list[int]
+    :param tipo_modulacao: Type of digital modulation ("NRZ", "Manchester" or "Bipolar")
+    :type tipo_modulacao: str
+    :return: Decoded bit sequence (list of True/False)
+    :rtype: list[bool]
+    """
+
+    if tipo_modulacao == "NRZ":
+        return nrz_polar_decoder(bit_string)
+      
+    if tipo_modulacao == "Manchester":
+        return manchester_decoder(bit_string)
+      
+    if tipo_modulacao == "Bipolar":
+        return bipolar_decoder(bit_string)
+
+def nrz_polar_decoder(bit_string: list[int]) -> list[bool]:
+    """
+    Decodes a signal modulated with NRZ-Polar.
+    Converts voltage levels back to logical values:
+      - +1V → True (1)
+      - -1V → False (0)
+
+    :param bit_string: Encoded NRZ-Polar signal (+1/-1)
+    :type bit_string: list[int]
+    :return: Decoded bit sequence (True/False)
+    :rtype: list[bool]
+    """
+
+    sinal_decodificado = []
+
+    for bit in bit_string:
+        if bit == 1:
+            sinal_decodificado.append(True)
+
+        else:
+            sinal_decodificado.append(False)
+
+    return sinal_decodificado
+
+
+  
+def manchester_decoder(bit_string: list[int]) -> list[bool]:
+    """
+    Decodes a signal modulated with Manchester encoding.
+    Each pair of samples corresponds to one bit:
+      - [0, 1] → False (0)
+      - [1, 0] → True  (1)
+
+    :param bit_string: Encoded Manchester signal (pairs of 0s and 1s)
+    :type bit_string: list[int]
+    :return: Decoded bit sequence (True/False)
+    :rtype: list[bool]
+    """
+
+    i = 0
+    sinal_decodificado = []
+    #clock = [0,1]
+
+    while i < len(bit_string):
+        if bit_string[i] == 0 and bit_string[i+1] == 1:
+            sinal_decodificado.append(False)
+
+        elif bit_string[i] == 1 and bit_string[i+1] == 0:
+            sinal_decodificado.append(True)
+
+        else :
+            print("Erro na decodificação")
+
+        i += 2
+
+    return sinal_decodificado
+
+
+def bipolar_decoder(bit_string: list[int]) -> list[bool]:
+    """
+    Decodes a signal modulated with Bipolar (AMI) encoding.
+    Converts voltage levels back to logical values:
+      - 0V → False (0)
+      - ±1V → True (1)
+
+    :param bit_string: Encoded Bipolar signal (values 0, +1, -1)
+    :type bit_string: list[int]
+    :return: Decoded bit sequence (True/False)
+    :rtype: list[bool]
+    """
+    
+    sinal_decodificado = []
+  
+    for bit in bit_string:
+        if bit == 0:
+            sinal_decodificado.append(False)
+
+        else:
+            sinal_decodificado.append(True)
+
+    return sinal_decodificado
