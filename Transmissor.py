@@ -13,9 +13,9 @@ def send_server(message: npt.NDArray, *,
     byte_array: bytes = message.tobytes()
 
     # Small protocol for variable data length
-    # ! - newtwork byte order
+    # ! - network byte order
     # I - pack int as unsigned int
-    # This protocol becomes problematic at +4GB sockets
+    # This protocol becomes problematic at >4GB sockets
     import struct
     msg_len = struct.pack('!I', len(byte_array))
     

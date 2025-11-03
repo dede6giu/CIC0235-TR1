@@ -91,19 +91,3 @@ def logmsg(message: str) -> None:
     with open("log.txt", "a") as f:
         f.write(message)
         f.write('\n')
-
-# if __name__ == "__main__":
-#     message = "long message that is really prone to errors"
-#     og = message
-#     message = string_to_bitstream(message)
-#     message = parity_insert(message)
-#     message = BPSK_modulation(message)
-#     message = samples_addnoise(message, spread=1500)
-#     message = BPSK_demodulation(message)
-#     if (parity_check(message)):
-#         message = bitstream_to_string(message[:-1])
-#         if (og != message): print("Error undetected!")
-#         print(message)
-#     else:
-#         print("Error on message!")
-#         print(bitstream_to_string(message[:-1]))

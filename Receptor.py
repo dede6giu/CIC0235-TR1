@@ -3,8 +3,8 @@ import numpy as np
 import numpy.typing as npt
 
 def start_server(*,
-            host: str = '127.0.0.1',
-            port: int = 60000):
+                host: str = '127.0.0.1',
+                port: int = 60000):
     
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         # Sets up server connection
@@ -34,7 +34,7 @@ def start_server(*,
             # Returns the ready-to-use NDArray downstream
             return byte_to_bit
 
-def recvall(sock, count: int) -> bytes:
+def recvall(sock: socket, count: int) -> bytes:
     buf = b''
     while count:
         newbuf = sock.recv(count)           # Try to get whole buffer
