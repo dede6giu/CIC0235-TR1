@@ -1,47 +1,56 @@
 import socket
 import numpy as np
 import numpy.typing as npt
+import threading
 
-def start_server(*,
-                host: str = '127.0.0.1',
-                port: int = 60000):
-    
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        # Sets up server connection
-        s.bind((host, port))
-        s.listen()
-        print(f"Awaiting connection on {host}:{port}...")
-        # utils.logmsg(f"Awaiting connection on {host}:{port}...")
-        conn, addr = s.accept()
+class Receptor:
+    def __init__(self):
+        self.flag_ready = threading.Event()
+        self.received_data: bytes = None
+        self.interpreted_data: npt.NDArray = None
 
-        with conn:
-            # utils.logmsg(f"Connected by {addr}")
-            
-            # Small protocol for message length size
-            # Unsigned integers take up 4 bytes
-            import struct
-            length_buf = recvall(conn, 4)
-            length_msg, = struct.unpack('!I', length_buf)
-            # utils.logmsg(f"{length_msg}")
-            received_data: bytes = recvall(conn, length_msg)
-            
-            # utils.logmsg(f"Received data: {received_data}")
+    def start_server(self, *,
+                    host: str = '127.0.0.1',
+                    port: int = 60000):
+        
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            # Sets up server connection
+            s.bind((host, port))
+            s.listen()
+            print(f"Awaiting connection on {host}:{port}...")
+            # utils.logmsg(f"Awaiting connection on {host}:{port}...")
+            conn, addr = s.accept()
 
-            # Reconstructs the received bytes into an npt.NDArray using
-            # internal numpy methods. This should result in a list[float]
-            byte_to_bit: npt.NDArray = np.frombuffer(received_data)
-            
-            # Returns the ready-to-use NDArray downstream
-            return byte_to_bit
+            with conn:
+                # utils.logmsg(f"Connected by {addr}")
+                
+                # Small protocol for variable data length
+                # ! - network byte order
+                # I - pack int as unsigned int
+                # This protocol becomes problematic at sockets >4GB
+                # Unsigned integers take up 4 bytes
+                import struct
+                length_buf = self.recvall(conn, 4)
+                length_msg, = struct.unpack('!I', length_buf)
+                # utils.logmsg(f"{length_msg}")
+                self.received_data = self.recvall(conn, length_msg)
+                
+                # utils.logmsg(f"Received data: {received_data}")
 
-def recvall(sock: socket, count: int) -> bytes:
-    buf = b''
-    while count:
-        newbuf = sock.recv(count)           # Try to get whole buffer
-        if not newbuf: return None          # Receiving the message failed
-        buf += newbuf
-        count -= len(newbuf)                # In case less than expected comes
-    return buf
+                # Reconstructs the received bytes into an npt.NDArray using
+                # internal numpy methods. This should result in a list[float]
+                self.interpreted_data = np.frombuffer(received_data)
+                
+                self.flag_ready.set()
+
+    def recvall(self, sock: socket, count: int) -> bytes:
+        buf = b''
+        while count:
+            newbuf = sock.recv(count)           # Try to get whole buffer
+            if not newbuf: return None          # Receiving the message failed
+            buf += newbuf
+            count -= len(newbuf)                # In case less than expected comes
+        return buf
 
 
 
