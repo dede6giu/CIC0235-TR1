@@ -14,7 +14,7 @@ GUI_ASK = "ASK"
 GUI_FSK = "FSK"
 GUI_BPSK = "BPSK"
 GUI_QPSK = "QPSK"
-GUI_Q8AM = "Q8AM"
+GUI_16QAM = "16QAM"
 
 GUI_CONTAGEM = "Contagem de Caracteres"
 GUI_FLAGBYTE = "FLAG e byte stuffing"
@@ -40,6 +40,7 @@ class Programa(Gtk.Window):
         self.digmod_section()
         self.algmod_section()
         self.framing_section()
+        self.errordetct_section()
         self.errorcurve_section()
         
         # Graph space
@@ -80,7 +81,7 @@ class Programa(Gtk.Window):
         self.algmod_option.append_text(GUI_FSK)
         self.algmod_option.append_text(GUI_BPSK)
         self.algmod_option.append_text(GUI_QPSK)
-        self.algmod_option.append_text(GUI_Q8AM)
+        self.algmod_option.append_text(GUI_16QAM)
         self.algmod_option.set_active(0)
         self.grid.attach(self.algmod_option, 4, 1, 2, 1)
         
@@ -95,7 +96,8 @@ class Programa(Gtk.Window):
         self.framing_option.append_text(GUI_FLAGBIT)
         self.framing_option.set_active(0)
         self.grid.attach(self.framing_option, 7, 0, 2, 1)
-        
+    
+    def errordetct_section(self):
         # Error detection options
         error_label = Gtk.Label(label="Detecção de Erros:")
         self.grid.attach(error_label, 6, 1, 1, 1)
