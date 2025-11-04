@@ -209,6 +209,170 @@ def BPSK_demodulation(signal: npt.NDArray, *,
     return result
 
 
+def QPSK_modulation(digitals: list[bool], *, 
+                    f: float = 100,
+                    smplcnt: int = 220,
+                    amp: float = 500) -> npt.NDArray:
+    #Initialize result as an empty NumPy array to hold the full signal
+    result: npt.NDArray = np.empty(0)
+    # Define the four possible phase shifts
+    phases: list[float] = [i * 0.5 * np.pi for i in range(4)]
+    period: float = 2 * np.pi * f
+
+    # Gray code mapping for QPSK (2 bits per symbol)
+    # Each 2-bit symbol ("dibit") is mapped to one of the 4 possible phase shifts
+    gray_code = {"00" : 0, "01": 1, "10": 3, "11": 2}
+
+    # Generate time vector for one symbol
+    t = np.linspace(0, period, smplcnt, endpoint=False)
+    # Precompute the four possible QPSK waveforms
+    waves: dict[str,np.NDArray] = {dibit: np.sin(t + phases[code]) * amp for dibit,code in gray_code.items()}
+
+    # Build the modulated signal by concatenating the waveforms corresponding to each dibit
+    result = np.concatenate([
+    waves[f"{digitals[i]}{digitals[i+1]}"]
+    for i in range(0, len(digitals), 2)
+    ])
+    return result
+
+def QPSK_demodulation(signal: npt.NDArray, *,
+                    f: float = 100,
+                    smplcnt: int = 220,
+                    amp: float = 500) -> list[bool]:
+    result: list[bool] = []
+    
+    phases: list[float] = [i * 0.5 * np.pi for i in range(4)]
+    period: float = 2 * np.pi * f
+    gray_code = {"00" : 0, "01": 1, "10": 3, "11": 2}
+
+    t = np.linspace(0, period, smplcnt, endpoint=False) 
+
+    # Rebuild the same reference waveforms as in modulation
+    waves: dict[str,np.NDArray] = {dibit: np.sin(t + phases[code]) * amp for dibit,code in gray_code.items()}
+
+    # Precompute the energy of each reference waveform (sum of squares)
+    waves_energy: dict[str, float] = {dibit: np.sum(np.square(wave)) for dibit,wave in waves.items()}
+
+    # Process the input signal segment by segment (one symbol at a time)
+    for i in range(0, len(signal), smplcnt):
+        # Compute the absolute difference between the received segment and each possible reference waveform
+        abs_diffs: dict[str, float] = {dibit: np.sum(np.abs(signal[i:i+smplcnt] - wave)) for dibit, wave in waves.items()}
+        # Find the smallest absolute difference (best phase match)
+        min_diff = min(abs_diffs.values())
+        # Identify all waveforms that have this minimum difference
+        min_keys = [k for k, v in abs_diffs.items() if v == min_diff]
+        # If there is a single best match, use it directly
+        if len(min_keys) == 1:
+            best_key = min_keys[0]
+            result.extend([c == '1' for c in best_key])
+        # If multiple candidates have the same distance, compare their energy levels for tie-breaking
+        else:
+            signal_energy: np.float64 = np.sum(np.square(signal[i:i+smplcnt]))
+            energy_diffs = {dibit:np.abs(signal_energy - waves_energy[dibit]) for dibit in min_keys}
+            best_key = min(energy_diffs, key=energy_diffs.get)
+            result.extend([c == '1' for c in best_key])
+    return result
+
+
+def QAM_modulation(digitals: list[bool], *, 
+                    f: float = 100,
+                    smplcnt: int = 220,
+                    amp: float = 500) -> npt.NDArray:
+    result: npt.NDArray = np.empty(0)
+    # Define the phase values for each possible phase state (12 total)
+    phases: list[float] = [np.pi / 12 + i * np.pi / 6 for i in range(12)]
+    period: float = 2 * np.pi * f
+
+    # Gray-coded 16-QAM mapping:
+    # Each 4-bit sequence (quadribit) corresponds to an amplitude scaling
+    # factor and a phase index (used to look up a phase value in 'phases')
+    gray_code = {
+        "0000":(0.33, 7),
+        "0001":(0.75, 8),
+        "0010":(0.75, 6),
+        "0011":(1.00, 7),
+        "0100":(0.33, 4),
+        "0101":(0.75, 3),
+        "0110":(0.75, 5),
+        "0111":(1.00, 4),
+        "1000":(0.33, 10),
+        "1001":(0.75, 9),
+        "1010":(0.75, 11),
+        "1011":(1.00, 10),
+        "1100":(0.33, 1),
+        "1101":(0.75, 2),
+        "1110":(0.75, 0),
+        "1111":(1.00, 1),
+    }
+
+    # Generate the time vector for one symbol (no endpoint)
+    t = np.linspace(0, period, smplcnt, endpoint=False) 
+
+    # Precompute all possible QAM symbol waveforms
+    # Each waveform is a sinusoid with specific amplitude and phase
+    waves: dict[str,np.NDArray] = {quadribit: amp_expansion_factor * np.sin(t + phases[phase_code]) * amp for quadribit, (amp_expansion_factor, phase_code) in gray_code.items()}
+
+    # Concatenate all waveform segments corresponding to each 4-bit group
+    result = np.concatenate([
+    waves[f"{digitals[i]}{digitals[i+1]}{digitals[i+2]}{digitals[i+3]}"]
+    for i in range(0, len(digitals), 4)
+    ])
+
+    return result
+
+def QAM_demodulation(signal: npt.NDArray, *,
+                    f: float = 100,
+                    smplcnt: int = 220,
+                    amp: float = 500) -> list[bool]:
+    # Initialize the result as an empty boolean list
+    result: list[bool] = []
+    phases: list[float] = [np.pi / 12 + i * np.pi / 6 for i in range(12)]
+    period: float = 2 * np.pi * f
+    gray_code = {
+        "0000":(0.33, 7),
+        "0001":(0.75, 8),
+        "0010":(0.75, 6),
+        "0011":(1.00, 7),
+        "0100":(0.33, 4),
+        "0101":(0.75, 3),
+        "0110":(0.75, 5),
+        "0111":(1.00, 4),
+        "1000":(0.33, 10),
+        "1001":(0.75, 9),
+        "1010":(0.75, 11),
+        "1011":(1.00, 10),
+        "1100":(0.33, 1),
+        "1101":(0.75, 2),
+        "1110":(0.75, 0),
+        "1111":(1.00, 1),
+    }
+    t = np.linspace(0, period, smplcnt, endpoint=False)
+     # Generate all possible symbol waveforms
+    waves: dict[str,np.NDArray] = {quadribit: amp_expansion_factor * np.sin(t + phases[phase_code]) * amp for quadribit, (amp_expansion_factor, phase_code) in gray_code.items()}
+
+    # Precompute the energy of each symbol (for later comparison)
+    waves_energy: dict[str,float] = {quadribit: np.sum(np.square(wave)) for quadribit,wave in waves.items()}
+
+    # Loop through the input signal in chunks of 'smplcnt' samples
+    for i in range(0, len(signal), smplcnt):
+        # Compute absolute difference between each known symbol and the current segment
+        abs_diffs: dict[str,float] = {quadribit: np.sum(np.abs(signal[i:i+smplcnt] - wave)) for quadribit, wave in waves.items()}
+
+        # Find the smallest absolute difference
+        min_diff = min(abs_diffs.values())
+        min_keys = [k for k, v in abs_diffs.items() if v == min_diff]
+
+        # If there’s only one best match, use it directly
+        if len(min_keys) == 1:
+            best_key = min_keys[0]
+            result.extend([c == '1' for c in best_key])
+         # If there's a tie, compare signal energies to decide
+        else:
+            signal_energy: np.float64 = np.sum(np.square(signal[i:i+smplcnt]))
+            energy_diffs = {quadribit:np.abs(signal_energy - waves_energy[quadribit]) for quadribit in min_keys}
+            best_key = min(energy_diffs, key=energy_diffs.get)
+            result.extend([c == '1' for c in best_key])
+    return result
 
 def coder(bit_string: list[bool], tipo_modulacao: str) -> list[int]:
     """
