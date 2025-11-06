@@ -39,7 +39,7 @@ class Receptor:
 
                 # Reconstructs the received bytes into an npt.NDArray using
                 # internal numpy methods. This should result in a list[float]
-                self.interpreted_data = np.frombuffer(received_data)
+                self.interpreted_data = np.frombuffer(self.received_data)
                 
                 self.flag_ready.set()
 

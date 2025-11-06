@@ -230,8 +230,8 @@ def QPSK_modulation(digitals: list[bool], *,
 
     # Build the modulated signal by concatenating the waveforms corresponding to each dibit
     result = np.concatenate([
-    waves[f"{digitals[i]}{digitals[i+1]}"]
-    for i in range(0, len(digitals), 2)
+        waves[f"{int(digitals[i])}{int(digitals[i+1])}"]
+        for i in range(0, len(digitals), 2)
     ])
     return result
 
@@ -314,8 +314,8 @@ def QAM_modulation(digitals: list[bool], *,
 
     # Concatenate all waveform segments corresponding to each 4-bit group
     result = np.concatenate([
-    waves[f"{digitals[i]}{digitals[i+1]}{digitals[i+2]}{digitals[i+3]}"]
-    for i in range(0, len(digitals), 4)
+        waves[f"{int(digitals[i])}{int(digitals[i+1])}{int(digitals[i+2])}{int(digitals[i+3])}"]
+        for i in range(0, len(digitals), 4)
     ])
 
     return result
