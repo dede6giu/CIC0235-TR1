@@ -385,11 +385,6 @@ def remove_bit_oriented_flags_from_bitstream(bitstream: List[bool]) -> List[List
     i: int = 0        # Main iteration index
 
     while i < len(bitstream):
-        # Debugging (optional)
-        print("i =", i)
-        print("buffer =", buffer)
-        print("buffer[-8:] =", buffer[-8:])
-        print("buffer[-8:] == FLAG_SEQUENCE?", buffer[-8:] == FLAG_SEQUENCE)
 
         # Detect a complete flag sequence at the end of the buffer
         if buffer[-8:] == FLAG_SEQUENCE:
@@ -403,8 +398,6 @@ def remove_bit_oriented_flags_from_bitstream(bitstream: List[bool]) -> List[List
             # Toggle in/out of frame state
             in_frame = not in_frame
 
-            print("extracted_frames =", extracted_frames)
-            print("continue (flag detected)")
             continue
 
         # Detect and remove a stuffed zero after five consecutive ones
@@ -413,8 +406,6 @@ def remove_bit_oriented_flags_from_bitstream(bitstream: List[bool]) -> List[List
             extracted_frames[-1].extend(buffer)
             buffer.clear()
 
-            print("extracted_frames =", extracted_frames)
-            print("continue (stuffed bit removed)")
             continue
 
         # Normal case: add current bit to buffer
@@ -423,11 +414,9 @@ def remove_bit_oriented_flags_from_bitstream(bitstream: List[bool]) -> List[List
 
     # Handle possible remaining data if bitstream ends with a flag
     if buffer[-8:] == FLAG_SEQUENCE:
-        print("buffer[-8:] == FLAG_SEQUENCE?", buffer[-8:] == FLAG_SEQUENCE)
         payload = buffer[:-8]
         if payload:
             extracted_frames[-1].extend(payload)
-            print("extracted_frames =", extracted_frames)
 
     return extracted_frames
 
