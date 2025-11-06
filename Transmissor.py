@@ -3,7 +3,7 @@ import time
 import numpy as np
 import numpy.typing as npt
 
-def send_server(message: npt.NDArray, *, 
+def send_to_server(message: npt.NDArray, *, 
                 host: str = '127.0.0.1',
                 port: int = 60000,
                 max_atts: int = 3):
