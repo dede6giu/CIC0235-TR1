@@ -1009,68 +1009,119 @@ def flag_bit_stuffing_framing(bit_string: list[int]) -> list[int]:
  
 
 
-def flag_bit_stuffing_deframing(bit_string: list[int]) -> list[int]:
-    """
-    Performs deframing of a bit string segmented using the Flag and Byte Stuffing method. 
-    It removes the start/end Flags, detects and removes the Escape bytes (de-stuffing), 
-    and handles frame synchronization by searching for the Flag byte-by-byte when 
-    outside a payload. Finally, it removes the zero padding.
+def desseparacao_byteList(list_frames: list[list[int]]) -> list[list[int]]:
+  """
+  Removes padding bits and restores the original data bytes from a list of frames.
+  
+  This function performs the reverse operation of the 'separacao_byte' function.
+  It extracts the initial 8-bit field from the first frame (which encodes the
+  number of padding zeros added during transmission) and removes those zeros
+  from the last frame, reconstructing the original payload.
+  
+  Steps:
+      1. Read the first 8 bits of the first frame (padding information).
+      2. Convert these bits into a decimal number (the amount of zero padding).
+      3. Remove the first 8 bits from the first frame.
+      4. Remove the corresponding number of zero bits from the end of the last frame.
+  
+  :param list_frames: List of frames, each represented as a list of bits.
+  :type list_frames: list[list[int]]
+  :return: List of frames with padding bits removed.
+  :rtype: list[list[int]]
+  """
 
-    :param bit_string: The framed bit string containing all segments and protocol overhead.
-    :type bit_string: list[int]
-    :return: The original, contiguous bit string data after deframing and depadding.
-    :rtype: list[int]
-    """
-    # Definições
-    escape = [0, 1, 1, 1, 1, 1, 0, 1]
-    flag = [0, 1, 1, 1, 1, 1, 1, 0]
 
-    decoded_payload = [] 
-    in_payload = False  
-    i = 0
 
+  bit_string = list_frames[0]
+  byte_tamanho = bit_string[:8] #Pegando os 8 primeiros bits que representam a contagem de zeros
+  zeros = int("".join(str(b) for b in byte_tamanho), 2) #Transformando binario em decimal
+  list_frames[0] = bit_string[8:] #Removendo os 8 primeiros bits da string
+  
+  last_frame = list_frames[-1]
+  if zeros != 0 : 
+    last_frame = last_frame[:-zeros] #Removendo os zeros adicionados
+    list_frames[-1] = last_frame
+  return list_frames
+
+
+
+def flag_bit_stuffing_deframing(bit_string: list[list[int]]) -> list[list[int]]:
+  """
+  Performs complete deframing of a signal encoded using the Flag and Byte Stuffing method.
+
+  This function identifies frame boundaries using FLAG bytes, handles ESCAPE sequences,
+  and reconstructs the original payload by removing framing bytes and padding.
+
+  The process is the reverse of the framing function (payload_flagORescape + add_flag).
+
+  Steps:
+      1. Iterate through the bit stream in 8-bit segments.
+      2. Detect FLAG bytes (start and end of frames).
+      3. Handle ESCAPE sequences to correctly interpret escaped bytes.
+      4. Collect payload bits between FLAG delimiters.
+      5. Remove zero-padding using 'desseparacao_byteList'.
+
+  :param bit_string: Complete framed bit sequence (list of bits).
+  :type bit_string: list[int]
+  :return: List of deframed bit sequences (payloads) extracted from the signal.
+  :rtype: list[list[int]]
+  """
+  # Definições
+  escape = [0, 1, 1, 1, 1, 1, 0, 1]
+  flag = [0, 1, 1, 1, 1, 1, 1, 0]
+  
+  
+  in_payload = False  
+  i = 0
+  
+  
+  current_payload = []
+  decoded_frames=[]
     
-    while i + 8 <= len(bit_string):# Enquanto houver pelo menos 8 bits para ler
+    
+    
+  while i + 8 <= len(bit_string):# Enquanto houver pelo menos 8 bits para ler
 
-        current_byte = bit_string[i:i + 8]
+    current_byte = bit_string[i:i + 8]
 
-        bytes_to_advance = 8
-
-       
-        if current_byte == flag:  # Byte é uma FLAG
-
-            if not in_payload:# Flag de Início: Entra no payload  
-                in_payload = True
-              
-            else:# Flag de Fim: Sai do payload
-                in_payload = False
-                
-        elif in_payload and current_byte == escape:# Payload e byte é um ESCAPE
-
-            if i + 16 <= len(bit_string):
-                # Adiciona o byte escapado (que está na posição i + 8)
-                decoded_payload.extend(bit_string[i + 8:i + 16])
-                bytes_to_advance = 16 # Avança 8 do ESCAPE + 8 do byte escapado
-            else:
-                # Caso de erro: ESCAPE incompleto. Finaliza a leitura.
-                bytes_to_advance = len(bit_string) # Avance o máximo para sair
-
-       
-        elif in_payload:
-            decoded_payload.extend(current_byte)
-            
+    bytes_to_advance = 8
 
 
-        else: 
-          # Não é a Flag: avança apenas 1 bit e tenta encontrar a Flag na próxima iteração
-          bytes_to_advance = 1
+    if current_byte == flag:  # Byte é uma FLAG
 
-        # Avança o índice i
-        i += bytes_to_advance
+      if not in_payload:# Flag de Início: Entra no payload  
+        in_payload = True
 
-    # Remove os zeros de padding
-    decoded_payload = desseparacao_byte(decoded_payload) 
-    return decoded_payload
+      else:# Flag de Fim: Sai do payload
+        in_payload = False
+
+        decoded_frames.append(current_payload)
+        current_payload = []
+
+
+    elif in_payload and current_byte == escape:# Payload e byte é um ESCAPE
+
+      if i + 16 <= len(bit_string):
+        current_payload.extend(bit_string[i + 8:i + 16]) # Adiciona o byte escapado (que está na posição i + 8)
+        bytes_to_advance = 16 # Avança 8 do ESCAPE + 8 do byte escapado
+
+      else:
+        # Caso de erro: ESCAPE incompleto. Finaliza a leitura.
+        bytes_to_advance = len(bit_string) # Avance o máximo para sair
+
+
+    elif in_payload: 
+      current_payload.extend(current_byte)
+
+    else:  # Não é Flag e nao esta em payload: avança apenas 1 bit e tenta encontrar a Flag na próxima iteração
+      bytes_to_advance = 1
+
+    # Avança o índice i
+    i += bytes_to_advance
+
+  # Remove os zeros de padding
+  decoded_frames = desseparacao_byteList(decoded_frames)
+  return decoded_frames
   
 
 
