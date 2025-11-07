@@ -4,6 +4,14 @@ from typing import List
 from math import floor,ceil, log2
 from enum import Enum
 
+"""
+============= ORDER OF USAGE =============
+
+TODO
+
+"""
+
+
 class EDP(Enum): #ErrorDetectionProtocol
     PARITY_BIT = 1
     CHECKSUM = 2
@@ -367,7 +375,48 @@ def add_bit_oriented_flags_to_frame(payload_bits: List[bool]) -> List[bool]:
     # Return the final framed sequence with flags at both ends
     return FLAG_PATTERN + stuffed_payload + FLAG_PATTERN
 
+def list_linearize(ilist: list[list[bool]]) -> list[bool]:
+    """
+    Linearizes a 2D list.
+    
+    Args:
+        ilist (list[list[bool]]): Input list
 
+    Returns:
+        list[bool]: Linearized list
+    """
+    result = []
+    for i in ilist:
+        for j in i:
+            result.append(j)
+    return result
+
+def list_pack(ilist: list[bool], k: int) -> list[list[bool]]:
+    """
+    Receives a linear list and breaks it into equal sectors of k items, making it 2D.
+    If the value k is not a divisor of len(ilist), then this returns None.
+    
+    Args:
+        ilist (list[bool]): Input list
+        k (int): Amount of items per list on new 2d-list
+
+    Returns:
+        list[bool]: 2D list with k-items lists
+    """
+    if len(ilist) % k != 0:
+        return None
+    
+    result = []
+    aux = []
+    cnt = 0
+    for i in ilist:
+        aux.append(i)
+        cnt += 1
+        if cnt >= k:
+            result.append(aux)
+            aux = []
+            cnt = 0
+    return result
 
 
 def remove_bit_oriented_flags_from_bitstream(bitstream: List[bool]) -> List[List[bool]]:
