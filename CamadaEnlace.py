@@ -7,6 +7,7 @@ from enum import Enum
 """
 ============= ORDER OF USAGE =============
 
+<<<<<<< HEAD
 Framing
 1. split_bitstream_into_payloads
 2. add_padding_and_padding_size
@@ -20,6 +21,9 @@ Deframing
 2. remove_EDC
 3. remove_paddings
 4. list_linearize
+=======
+TODO
+>>>>>>> 4636e8e487a28ef465c00c2de190c995211833df
 
 """
 
