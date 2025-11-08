@@ -338,7 +338,8 @@ def remove_paddings(payloads: List[List[bool]]) -> List[List[bool]]:
     padding_size: int = bool_list_to_int(payloads.pop())
 
     # Remove 'padding_size' bits from the end of the last real payload
-    payloads[-1] = payloads[-1][:-padding_size]
+    if padding_size:
+        payloads[-1] = payloads[-1][:-padding_size]
 
     # Return the list without the padding information payload
     return payloads

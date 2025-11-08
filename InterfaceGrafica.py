@@ -231,9 +231,9 @@ class Programa(Gtk.Window):
         if framing_method == GUI_CONTAGEM:
             enlace_type = ce.FP.CHAR_COUNT
         elif framing_method == GUI_FLAGBYTE:
-            enlace_type = ce.FP.BIT_ORIENTED_FLAGGING
-        elif framing_method == GUI_FLAGBIT:
             enlace_type = ce.FP.BYTE_ORIENTED_FLAGGING
+        elif framing_method == GUI_FLAGBIT:
+            enlace_type = ce.FP.BIT_ORIENTED_FLAGGING
         else:
             return False
 
