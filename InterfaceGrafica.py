@@ -29,13 +29,14 @@ GUI_FLAGBYTE = "FLAG e byte stuffing"
 GUI_FLAGBIT = "FLAG e bit stuffing"
 
 GUI_PBIT = "Bit de Paridade"
+GUI_CHKSM = "Checksum"
 GUI_CRC32 = "CRC-32"
 GUI_HAM = "Hamming (com correção)"
 
 class Programa(Gtk.Window):
     def __init__(self):
         Gtk.Window.__init__(self, title="Simulador de Camadas Física e Enlace")
-        self.set_default_size(1600, 900)
+        # self.set_default_size(1600, 900)
         
         # Basic layout
         self.grid = Gtk.Grid()
@@ -51,10 +52,6 @@ class Programa(Gtk.Window):
         self.framing_section()
         self.errordetct_section()
         self.errorcurve_section()
-        
-        # Graph space
-        self.graph_space = Gtk.ScrolledWindow()
-        self.grid.attach(self.graph_space, 0, 2, 40, 80)
 
         # Run() button
         self.run_button = Gtk.Button(label="Executar Simulação")
@@ -114,6 +111,7 @@ class Programa(Gtk.Window):
 
         self.errordetct_option = Gtk.ComboBoxText()
         self.errordetct_option.append_text(GUI_PBIT)
+        self.errordetct_option.append_text(GUI_CHKSM)
         self.errordetct_option.append_text(GUI_CRC32)
         self.errordetct_option.append_text(GUI_HAM)
         self.errordetct_option.set_active(0)
@@ -135,7 +133,7 @@ class Programa(Gtk.Window):
     def on_run_clicked(self, button):
         # Get all configurations and verify their validity
         message = self.input_message.get_text()
-        if not message.isascii():
+        if not message.isascii() or message == "":
             print('Invalid message! Must be ASCII!')
             return
 
@@ -167,10 +165,6 @@ class Programa(Gtk.Window):
             print("Variance must be a positive float!")
             return
 
-        # Remove graphs only after valid info has been inputted
-        for g in self.graph_space.get_children():
-            self.graph_space.remove(g)
-
         if not self.run(message,
                         digital_mod,
                         analog_mod,
@@ -178,7 +172,7 @@ class Programa(Gtk.Window):
                         error_method,
                         errorcurve_mean,
                         errorcurve_variance):
-            print("big boo boo error")
+            print("Something went TERRIBLY wrong")
         
     def run(self,
             message, 
@@ -201,9 +195,73 @@ class Programa(Gtk.Window):
 
         # utils.logmsg(str(dmsg))
         
-        # Digital encoding (?)
-        # framing
-        # error detection
+        # Digital encoding
+        dmmsg: npt.NDArray = np.empty(0)
+        if digital_mod == GUI_NRZ:
+            dmmsg = cf.nrz_polar(dmsg)
+        elif digital_mod == GUI_MAN:
+            dmmsg = cf.manchester(dmsg)
+        elif digital_mod == GUI_BIP:
+            dmmsg = cf.bipolar(dmsg)
+        else:
+            return False
+        if dmmsg is None:
+            return False
+        self.digital_plot(dmmsg, "Modulação digital")
+
+
+        # Analog modulation of only the dsignal, no noise, no framing
+        auxmsg: npt.NDArray = np.empty(0)
+        if analog_mod == GUI_ASK:
+            auxmsg = cf.ASK_modulation(dmsg, smplcnt=GUI_SMPLCNT, f=GUI_F1, amp=GUI_AMP)
+        elif analog_mod == GUI_FSK:
+            auxmsg = cf.FSK_modulation(dmsg, (GUI_F1, GUI_F2), smplcnt=GUI_SMPLCNT, amp=GUI_AMP)
+        elif analog_mod == GUI_BPSK:
+            auxmsg = cf.BPSK_modulation(dmsg, smplcnt=GUI_SMPLCNT, f=GUI_F1, amp=GUI_AMP)
+        elif analog_mod == GUI_QPSK:
+            auxmsg = cf.QPSK_modulation(dmsg, smplcnt=GUI_SMPLCNT, f=GUI_F1, amp=GUI_AMP)
+        elif analog_mod == GUI_16QAM:
+            auxmsg = cf.QAM_modulation(dmsg, smplcnt=GUI_SMPLCNT, f=GUI_F1, amp=GUI_AMP)
+        else:
+            return False
+        self.analog_plot(auxmsg, "Apenas mensagem, sem enlace ou ruído")
+
+
+        # Framing type
+        if framing_method == GUI_CONTAGEM:
+            enlace_type = ce.FP.CHAR_COUNT
+        elif framing_method == GUI_FLAGBYTE:
+            enlace_type = ce.FP.BIT_ORIENTED_FLAGGING
+        elif framing_method == GUI_FLAGBIT:
+            enlace_type = ce.FP.BYTE_ORIENTED_FLAGGING
+        else:
+            return False
+
+        # Error detection / correction type
+        if error_method == GUI_PBIT:
+            error_type = ce.EDP.PARITY_BIT
+        elif error_method == GUI_CHKSM:
+            error_type = ce.EDP.CHECKSUM
+        elif error_method == GUI_CRC32:
+            error_type = ce.EDP.CRC32
+        elif error_method == GUI_HAM:
+            error_type = ce.EDP.HAMMING
+        else:
+            return False
+
+
+        # Apply Framing Protocol + Error Detection Protocol
+        PAYLOADSIZE = 32
+        dmsg = ce.split_bitstream_into_payloads(dmsg, PAYLOADSIZE)
+        if dmsg is None: return False
+        dmsg = ce.add_padding_and_padding_size(dmsg, PAYLOADSIZE)
+        if dmsg is None: return False
+        dmsg = ce.add_EDC(dmsg, error_type)
+        if dmsg is None: return False
+        dmsg = ce.add_framing_protocol(dmsg, enlace_type)
+        if dmsg is None: return False
+        dmsg = ce.list_linearize(dmsg)
+        if dmsg is None: return False
 
         # Creates and starts receiver at a different thread
         # This is necessary for the asynchronous socket implementation
@@ -228,17 +286,11 @@ class Programa(Gtk.Window):
             return False
         if amsg is None:
             return False
-
-        # utils.logmsg(np.array2string(amsg))
         
         # Add noise
-        amsg = utils.samples_addnoise(amsg, 
-                                    average=errorcurve_mean,
-                                    spread=errorcurve_variance)
+        amsg = utils.samples_addnoise(amsg, average=errorcurve_mean, spread=errorcurve_variance)
         if amsg is None:
             return False
-
-        # utils.logmsg(np.array2string(amsg))
 
         # Send message
         if not tm.send_to_server(amsg):
@@ -251,7 +303,7 @@ class Programa(Gtk.Window):
             return False
 
         # Display received signal
-        self.analog_plot(rmsg)
+        self.analog_plot(rmsg, "Sinal recebido enlaçado")
         
         # Decode message
         if analog_mod == GUI_ASK:
@@ -269,32 +321,66 @@ class Programa(Gtk.Window):
         if rmsg is None:
             return False
 
-        # utils.logmsg(np.array2string(rmsg))
+        # Deframe message
+        rmsg = ce.remove_framing_protocol(rmsg, enlace_type)
+        if rmsg is None: return False
+            # Check for errors (and correct them if it is the case)
+        rmsg = ce.remove_EDC(rmsg, error_type)
+        if rmsg is None: return False
+        rmsg = ce.remove_paddings(rmsg)
+        if rmsg is None: return False
+        rmsg = ce.list_linearize(rmsg)
+        if rmsg is None: return False
 
-        # Check errors
-        # Framing things
+        # Display analyzed bitstream
+        self.digital_plot(rmsg, "Mensagem decodificada")
 
         # Display message
         print(utils.bitstream_to_string(rmsg))
-
         
         # Everything went right!
         return True
 
-    def analog_plot(self, signal):
+    def analog_plot(self, signal, title):
+        mod = self.algmod_option.get_active_text()
         graph = plt.Figure(figsize=(5, 3), dpi=100)
         ax = graph.add_subplot(111)
         ax.plot(signal)
-        ax.set_title(f"Modulação {self.algmod_option.get_active_text()}")
+        ax.set_title(f"Sinal Analógico")
         ax.set_xlabel("Amostras")
         ax.set_ylabel("Leitura de tensão")
 
         canvas = FigureCanvas(graph)
-        self.graph_space.add(canvas)
-        canvas.show()
+        canvas.set_size_request(800, 400)
+        win = Gtk.Window(title=f"Analógico - {title}")
+        win.add(canvas)
+        win.show_all()
 
-    def digital_plot(self, dsignal):
-        pass
+    def digital_plot(self, dsignal, title):
+        graph = plt.Figure(figsize=(5, 3), dpi=100)
+        ax = graph.add_subplot(111)
+
+        mod = self.digmod_option.get_active_text()
+        
+        if title == GUI_MAN:
+            amnt_smpl = len(dsignal) // 2
+        else:
+            amnt_smpl = len(dsignal)
+
+        x = np.linspace(0, amnt_smpl, amnt_smpl, endpoint=False)
+
+        ax.plot(x, dsignal, drawstyle="steps-pre")
+        ax.set_title(f"Sinal Digital")
+        ax.set_xlabel("Amostras")
+        ax.set_ylabel("Leitura de tensão")
+        ax.set_xticks(np.arange(0, amnt_smpl + 1))
+        ax.set_xlim(0, amnt_smpl)
+
+        canvas = FigureCanvas(graph)
+        canvas.set_size_request(800, 400)
+        win = Gtk.Window(title=f"Digital - {title}")
+        win.add(canvas)
+        win.show_all()
 
 
 if __name__ == "__main__":
