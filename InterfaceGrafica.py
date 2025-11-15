@@ -31,7 +31,6 @@ GUI_FLAGBIT = "FLAG e bit stuffing"
 GUI_PBIT = "Bit de Paridade"
 GUI_CHKSM = "Checksum"
 GUI_CRC32 = "CRC-32"
-GUI_HAM = "Hamming (com correção)"
 
 class Programa(Gtk.Window):
     def __init__(self):
@@ -113,7 +112,6 @@ class Programa(Gtk.Window):
         self.errordetct_option.append_text(GUI_PBIT)
         self.errordetct_option.append_text(GUI_CHKSM)
         self.errordetct_option.append_text(GUI_CRC32)
-        self.errordetct_option.append_text(GUI_HAM)
         self.errordetct_option.set_active(0)
         self.grid.attach(self.errordetct_option, 7, 1, 2, 1)
         
@@ -244,8 +242,6 @@ class Programa(Gtk.Window):
             error_type = ce.EDP.CHECKSUM
         elif error_method == GUI_CRC32:
             error_type = ce.EDP.CRC32
-        elif error_method == GUI_HAM:
-            error_type = ce.EDP.HAMMING
         else:
             return False
 
@@ -257,6 +253,8 @@ class Programa(Gtk.Window):
         dmsg = ce.add_padding_and_padding_size(dmsg, PAYLOADSIZE)
         if dmsg is None: return False
         dmsg = ce.add_EDC(dmsg, error_type)
+        if dmsg is None: return False
+        dmsg = ce.add_ECC(dmsg)
         if dmsg is None: return False
         dmsg = ce.add_framing_protocol(dmsg, enlace_type)
         if dmsg is None: return False
@@ -329,11 +327,22 @@ class Programa(Gtk.Window):
         # Deframe message
         rmsg = ce.remove_framing_protocol(rmsg, enlace_type)
         if rmsg is None: return False
-            # Check for errors (and correct them if it is the case)
+        # Correct errors identified by the ECC
+        rmsg = ce.ECC_fix_corrupted_bits(rmsg)
+        # Remove ECC
+        rmsg = ce.remove_ECC(rmsg)
+        # Find corrupted frames
+        corrupted_frames =  ce.find_corrupted_frames(rmsg, error_type)
+        print(f"Found {len(corrupted_frames)} corrupted frames.")
+        if corrupted_frames:
+            print("Corrupted frames:", corrupted_frames)
+        # Remove EDC
         rmsg = ce.remove_EDC(rmsg, error_type)
         if rmsg is None: return False
+        # Remove padding
         rmsg = ce.remove_paddings(rmsg)
         if rmsg is None: return False
+        # Flatten final result
         rmsg = ce.list_linearize(rmsg)
         if rmsg is None: return False
 
@@ -341,6 +350,7 @@ class Programa(Gtk.Window):
         self.digital_plot(rmsg, "Mensagem decodificada")
 
         # Display message
+        print("Message:")
         print(utils.bitstream_to_string(rmsg))
         
         # Everything went right!
