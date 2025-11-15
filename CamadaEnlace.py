@@ -191,6 +191,90 @@ def add_framing_protocol(payloads_with_edc: List[List[bool]], fp: FP) -> List[Li
 
     return payloads_with_edc
 
+def list_linearize(ilist: list[list[bool]]) -> list[bool]:
+    """
+    Linearizes a 2D list.
+    
+    Args:
+        ilist (list[list[bool]]): Input list
+
+    Returns:
+        list[bool]: Linearized list
+    """
+    result = []
+    for i in ilist:
+        for j in i:
+            result.append(j)
+    return result
+
+
+def add_padding_for_4bit_alignment(bitstream: List[bool]) -> List[bool]:
+    """
+    Adds padding bits to the input bitstream so that its length becomes a
+    multiple of 4. Additionally, appends a 4-bit field at the end of the
+    stream indicating how many padding bits were added.
+
+    This is useful for digital modulation schemes such as 16QAM, where the
+    number of bits must always be divisible by 4.
+
+    Args:
+        bitstream (List[bool]):
+            The original list of bits (True = 1, False = 0).
+
+    Returns:
+        List[bool]:
+            The bitstream with the necessary padding and a 4-bit padding-size field appended.
+    """
+
+    # Compute how many padding bits are needed.
+    # If the bitstream length is already a multiple of 4,
+    # we want padding_size = 0 rather than 4, so we apply an extra modulo.
+    padding_size: int = (4 - (len(bitstream) % 4)) % 4
+
+    # Create the padding sequence (False == 0) of the required length.
+    padding_bits: List[bool] = [False] * padding_size
+
+    # Convert the padding size (0–3) into a 4-bit boolean list.
+    # Example: padding_size = 2  ->  [0, 0, 1, 0]
+    padding_size_bits: List[bool] = int_to_bool_list(padding_size, 4)
+
+    # Append the padding bits to the end of the bitstream.
+    bitstream.extend(padding_bits)
+
+    # Append the 4-bit representation of the padding size.
+    bitstream.extend(padding_size_bits)
+
+    return bitstream
+
+def remove_padding_for_4bit_alignment(bitstream: List[bool]) -> List[bool]:
+    """
+    Removes the padding previously added by `add_padding_for_4bit_alignment`.
+    The last 4 bits of the bitstream encode how many padding bits were appended.
+
+    Args:
+        bitstream (List[bool]):
+            The bitstream containing the original data, the padding bits,
+            and the final 4-bit padding-size field.
+
+    Returns:
+        List[bool]:
+            The bitstream with the padding bits and the 4-bit padding-size field removed.
+    """
+
+    # Read the last 4 bits and convert them into an integer.
+    # These bits specify how many padding bits were added.
+    padding_size = bool_list_to_int(bitstream[-4:])
+
+    # Remove the 4-bit padding-size field.
+    del bitstream[-4:]
+
+    # Remove the padding bits themselves.
+    for _ in range(padding_size):
+        bitstream.pop()
+
+    return bitstream
+
+
 def remove_framing_protocol(bitstream: List[bool], fp: FP) -> List[List[bool]]:
     """
     Removes the framing information from a bitstream according to the selected framing protocol.
@@ -388,21 +472,7 @@ def add_bit_oriented_flags_to_frame(payload_bits: List[bool]) -> List[bool]:
     # Return the final framed sequence with flags at both ends
     return FLAG_PATTERN + stuffed_payload + FLAG_PATTERN
 
-def list_linearize(ilist: list[list[bool]]) -> list[bool]:
-    """
-    Linearizes a 2D list.
-    
-    Args:
-        ilist (list[list[bool]]): Input list
 
-    Returns:
-        list[bool]: Linearized list
-    """
-    result = []
-    for i in ilist:
-        for j in i:
-            result.append(j)
-    return result
 
 def list_pack(ilist: list[bool], k: int) -> list[list[bool]]:
     """
