@@ -262,6 +262,8 @@ class Programa(Gtk.Window):
         if dmsg is None: return False
         dmsg = ce.list_linearize(dmsg)
         if dmsg is None: return False
+        dmsg = ce.add_padding_for_4bit_alignment(dmsg)
+        if dmsg is None: return False
 
         # Creates and starts receiver at a different thread
         # This is necessary for the asynchronous socket implementation
@@ -320,6 +322,9 @@ class Programa(Gtk.Window):
             return False
         if rmsg is None:
             return False
+        
+        #Remove 4bit padding from message
+        rmsg = ce.remove_padding_for_4bit_alignment(rmsg)
 
         # Deframe message
         rmsg = ce.remove_framing_protocol(rmsg, enlace_type)
