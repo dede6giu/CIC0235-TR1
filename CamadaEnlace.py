@@ -11,15 +11,20 @@ Framing
 1. split_bitstream_into_payloads
 2. add_padding_and_padding_size
 3. add_EDC
-4. add_framing_protocol
-5. list_linearize
+4. add_ECC
+5. add_framing_protocol
+6. list_linearize
+7. add_padding_for_4bit_alignment
 
 Deframing
-1. remove_framing_protocol
-    a. Check errors with find_corrupted_frames (doesn't alter list, returns list[int] of places with errors)
-2. remove_EDC
-3. remove_paddings
-4. list_linearize
+1. Remove_padding_for_4bit_alignment
+2. remove_framing_protocol
+3. ECC_fix_corrupted_bits
+4. remove_ECC
+5. find_corrupted_frames
+6. remove_EDC
+7. remove_paddings
+8. list_linearize
 
 """
 
@@ -28,7 +33,6 @@ class EDP(Enum): #ErrorDetectionProtocol
     PARITY_BIT = 1
     CHECKSUM = 2
     CRC32 = 3
-    HAMMING = 4
 
 class FP(Enum): #FramingProtocol
     CHAR_COUNT = 1
@@ -37,14 +41,58 @@ class FP(Enum): #FramingProtocol
 
 
 
-def int_to_bool_list(num: int, size: int):
+def int_to_bool_list(num: int, size: int) -> List[bool]:
+    """
+    Converts an integer into a fixed-size list of booleans representing its
+    binary form. If the binary representation has fewer than `size` bits,
+    the function adds zeros on the left to reach the required number of elements.
+    If it has more, only the least significant `size` bits are kept.
+
+    Args:
+        num (int):
+            The integer to be converted into a bit list.
+        size (int):
+            The required number of bits in the output list.
+
+    Returns:
+        List[bool]:
+            A list of booleans where True represents bit 1 and False represents bit 0.
+            The list contains exactly `size` elements.
+    """
+
+    # Convert the integer into a binary string (without the '0b' prefix),
+    # add leading zeros to reach the required length,
+    # and keep exactly the last `size` bits.
     binary_num: str = bin(num)[2:].zfill(size)[-size:]
+
+    # Convert each character ('0' or '1') into a boolean value.
     bool_list: List[bool] = [c == "1" for c in binary_num]
+
     return bool_list
 
-def bool_list_to_int(bool_list: List[bool]):
-    num_str: str = "".join(["1" if b else "0" for b in bool_list])
+
+def bool_list_to_int(bool_list: List[bool]) -> int:
+    """
+    Converts a list of boolean values into an integer by interpreting the list
+    as a binary number. Each element is treated as a bit, where True is 1 and
+    False is 0. The first element corresponds to the most significant bit.
+
+    Args:
+        bool_list (List[bool]):
+            A list of booleans representing a binary number.
+
+    Returns:
+        int:
+            The integer value obtained from interpreting the list as a binary number.
+    """
+
+    # Convert each boolean into its corresponding character ('1' or '0'),
+    # then join them into a single binary string.
+    num_str: str = "".join("1" if b else "0" for b in bool_list)
+
+    # Convert the binary string into an integer using base 2.
     num = int(num_str, 2)
+
     return num
 
 
@@ -119,7 +167,6 @@ def add_EDC(payloads: List[List[bool]], edp: EDP, odd: bool = False, k: int = 2)
     - Parity bit (even or odd)
     - Checksum
     - CRC-32
-    - Hamming code
 
     Args:
         payloads (List[List[bool]]): List of payloads, where each payload is a list of bits.
@@ -148,16 +195,35 @@ def add_EDC(payloads: List[List[bool]], edp: EDP, odd: bool = False, k: int = 2)
             for i, payload in enumerate(payloads):
                 payloads[i] = crc32_insert(payload)
 
-        case EDP.HAMMING:
-            # Insert Hamming code parity bits into each payload
-            for i, payload in enumerate(payloads):
-                payloads[i] = hamming_insert(payload)
-
         case _:
             # Default case: do nothing if no valid protocol is selected
             pass
 
     return payloads
+
+def add_ECC(payloads: List[List[bool]]) -> List[List[bool]]:
+    """
+    Applies Hamming-code based Error-Correcting Code (ECC) to a list of payloads.
+    For each payload (a list of bits), parity bits are inserted using
+    the `hamming_insert` function.
+
+    Args:
+        payloads (List[List[bool]]):
+            A list of bitstreams, where each bitstream represents a payload
+            to which ECC parity bits will be added.
+
+    Returns:
+        List[List[bool]]:
+            A list of bitstreams where each payload now contains the
+            corresponding Hamming parity bits.
+    """
+
+    for i, payload in enumerate(payloads):
+        # Replace each payload with its ECC-extended version.
+        payloads[i] = hamming_insert(payload)
+
+    return payloads
+
 
 def add_framing_protocol(payloads_with_edc: List[List[bool]], fp: FP) -> List[List[bool]]:
     """
@@ -307,6 +373,57 @@ def remove_framing_protocol(bitstream: List[bool], fp: FP) -> List[List[bool]]:
 
     return frame_bodies
 
+def ECC_fix_corrupted_bits(payloads: List[List[bool]]) -> List[List[bool]]:
+    """
+    Detects and corrects single-bit errors in each payload using the Hamming ECC
+    algorithm. For each payload, the function identifies the position of the
+    corrupted bit (if any) and then corrects it.
+
+    Args:
+        payloads (List[List[bool]]):
+            A list of bitstreams, where each bitstream contains data bits, EDC
+            and Hamming ECC parity bits.
+
+    Returns:
+        List[List[bool]]:
+            A list of bitstreams where any single-bit error present in each
+            payload has been corrected.
+    """
+
+    for i, payload in enumerate(payloads):
+
+        # Determine the index of the corrupted bit using the Hamming syndrome.
+        # If no error is present, this function returns 0.
+        corrupted_bit_position = hamming_find_corrupted_bit(payload)
+
+        # Correct the corrupted bit in the payload (if the position is non-zero)
+        # and store the corrected payload back into the list.
+        payloads[i] = hamming_fix_corrupted_bit(payload, corrupted_bit_position)
+
+    return payloads
+    
+
+def remove_ECC(payloads: List[List[bool]]) -> List[List[bool]]:
+    """
+    Removes the Hamming-code ECC (Error-Correcting Code) parity bits from
+    each payload.
+
+    Args:
+        payloads (List[List[bool]]):
+            A list of bitstreams, where each bitstream includes ECC parity bits
+            that were previously inserted using a Hamming code.
+
+    Returns:
+        List[List[bool]]:
+            A list of bitstreams where the ECC parity bits have been removed
+            and only the corrected data bits remain.
+    """
+
+    for i, payload in enumerate(payloads):
+        # Remove Hamming parity bits from each payload
+        payloads[i] = hamming_remove_ECC(payload)
+
+    return payloads
 
 def find_corrupted_frames(frame_bodies: List[List[bool]], edp: EDP, odd: bool = False, k: int = 2) -> List[int]:
     """
@@ -353,13 +470,6 @@ def find_corrupted_frames(frame_bodies: List[List[bool]], edp: EDP, odd: bool = 
                 if not is_valid:
                     corrupted_frames.append(i)
 
-        case EDP.HAMMING:
-            # Check Hamming syndrome — if nonzero, a bit is corrupted
-            for i, frame_body in enumerate(frame_bodies):
-                corrupted_bit = hamming_find_corrupted_bit(frame_body)
-                if corrupted_bit:
-                    corrupted_frames.append(i)
-
         case _:
             # No check performed if the protocol is not recognized
             pass
@@ -396,9 +506,6 @@ def remove_EDC(frame_bodies: List[List[bool]], edp: EDP, k: int = 2) -> List[Lis
         case EDP.CRC32:
             for i, frame_body in enumerate(frame_bodies):
                 frame_bodies[i] = crc32_remove_EDC(frame_body)
-        case EDP.HAMMING:
-            for i, frame_body in enumerate(frame_bodies):
-                frame_bodies[i] = hamming_remove_EDC(frame_body)
 
     return frame_bodies
 
@@ -428,6 +535,34 @@ def remove_paddings(payloads: List[List[bool]]) -> List[List[bool]]:
     # Return the list without the padding information payload
     return payloads
 
+
+
+def list_pack(ilist: list[bool], k: int) -> list[list[bool]]:
+    """
+    Receives a linear list and breaks it into equal sectors of k items, making it 2D.
+    If the value k is not a divisor of len(ilist), then this returns None.
+    
+    Args:
+        ilist (list[bool]): Input list
+        k (int): Amount of items per list on new 2d-list
+
+    Returns:
+        list[bool]: 2D list with k-items lists
+    """
+    if len(ilist) % k != 0:
+        return None
+    
+    result = []
+    aux = []
+    cnt = 0
+    for i in ilist:
+        aux.append(i)
+        cnt += 1
+        if cnt >= k:
+            result.append(aux)
+            aux = []
+            cnt = 0
+    return result
 
 
 def add_bit_oriented_flags_to_frame(payload_bits: List[bool]) -> List[bool]:
@@ -472,40 +607,20 @@ def add_bit_oriented_flags_to_frame(payload_bits: List[bool]) -> List[bool]:
     # Return the final framed sequence with flags at both ends
     return FLAG_PATTERN + stuffed_payload + FLAG_PATTERN
 
-
-
-def list_pack(ilist: list[bool], k: int) -> list[list[bool]]:
-    """
-    Receives a linear list and breaks it into equal sectors of k items, making it 2D.
-    If the value k is not a divisor of len(ilist), then this returns None.
-    
-    Args:
-        ilist (list[bool]): Input list
-        k (int): Amount of items per list on new 2d-list
-
-    Returns:
-        list[bool]: 2D list with k-items lists
-    """
-    if len(ilist) % k != 0:
-        return None
-    
-    result = []
-    aux = []
-    cnt = 0
-    for i in ilist:
-        aux.append(i)
-        cnt += 1
-        if cnt >= k:
-            result.append(aux)
-            aux = []
-            cnt = 0
-    return result
-
-
 def remove_bit_oriented_flags_from_bitstream(bitstream: List[bool]) -> List[List[bool]]:
     """
     Removes framing flags (01111110) and stuffed bits (bit-stuffing) from a bit-oriented bitstream.
     Returns a list of extracted frame payloads, each represented as a list of booleans.
+
+     Args:
+        bitstream (List[bool]):
+            The raw bitstream containing HDLC-style frames, including flag
+            sequences and stuffed bits.
+
+    Returns:
+        List[List[bool]]:
+            A list where each element is a list of booleans representing the
+            decoded payload of a single frame (with flags and stuffed bits removed).
     """
 
     extracted_frames: List[List[bool]] = [[]]  # List of decoded frame payloads
@@ -816,23 +931,6 @@ def crc32_remove_EDC(frame_bits: List[bool]) -> List[bool]:
     return frame_bits[:-32]
 
 
-#def crc32_manual(bitstream: list[bool], generator: int = 0x04C11DB7) -> list[bool]:
-#    """
-#    Calcula o CRC-32 (sem refletir bits) diretamente sobre uma lista de bools.
-#    generator deve ser um inteiro de 33 bits (grau 32).
-#    """
-#    n = 32
-#    data = bitstream[:] + [False] * n  # acrescenta 32 zeros
-#
-#    for i in range(len(bitstream)):
-#        if data[i]:  # bit 1 encontrado → XOR com gerador
-#            for j in range(33):
-#                data[i + j] ^= bool((generator >> (32 - j)) & 1)
-#
-#    # resto são os últimos 32 bits
-#    return data[-n:]
-
-
 
 def hamming_insert(data_bits: List[bool]) -> List[bool]:
     """
@@ -914,11 +1012,23 @@ def hamming_find_corrupted_bit(frame_body: List[bool]) -> int:
     return corrupted_bit_position
 
 def hamming_fix_corrupted_bit(frame_body: List[bool], corrupted_bit_position: int) -> List[bool]:
+    """
+    Corrects a single-bit error in a Hamming-encoded frame body.
+
+    Args:
+        frame_body: List of bits representing the frame body.
+        corrupted_bit_position: 1-based index of the corrupted bit; 0 means no error.
+
+    Returns:
+        The frame body with the corrected bit (if an error was detected).
+    """
+
+    # Flip the corrupted bit if its 1-based position is nonzero
     if corrupted_bit_position != 0:
         frame_body[corrupted_bit_position - 1] = not(frame_body[corrupted_bit_position - 1])
     return frame_body
 
-def hamming_remove_EDC(frame_bits: List[bool]) -> List[bool]:
+def hamming_remove_ECC(frame_bits: List[bool]) -> List[bool]:
     """
     Removes the error detection/correction bits from a Hamming-encoded frame.
 
