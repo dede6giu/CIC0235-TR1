@@ -194,7 +194,7 @@ class Programa(Gtk.Window):
         # utils.logmsg(str(dmsg))
         
         # Digital encoding
-        dmmsg: npt.NDArray = np.empty(0)
+        dmmsg: np.NDArray = np.empty(0)
         if digital_mod == GUI_NRZ:
             dmmsg = cf.nrz_polar(dmsg)
         elif digital_mod == GUI_MAN:
@@ -209,7 +209,7 @@ class Programa(Gtk.Window):
 
 
         # Analog modulation of only the dsignal, no noise, no framing
-        auxmsg: npt.NDArray = np.empty(0)
+        auxmsg: np.NDArray = np.empty(0)
         if analog_mod == GUI_ASK:
             auxmsg = cf.ASK_modulation(dmsg, smplcnt=GUI_SMPLCNT, f=GUI_F1, amp=GUI_AMP)
         elif analog_mod == GUI_FSK:
@@ -271,7 +271,7 @@ class Programa(Gtk.Window):
         time.sleep(0.5)
 
         # Encode message
-        amsg: npt.NDArray = np.empty(0)
+        amsg: np.NDArray = np.empty(0)
         if analog_mod == GUI_ASK:
             amsg = cf.ASK_modulation(dmsg, smplcnt=GUI_SMPLCNT, f=GUI_F1, amp=GUI_AMP)
         elif analog_mod == GUI_FSK:
@@ -298,7 +298,7 @@ class Programa(Gtk.Window):
         
         # Receive message
         receiver.flag_ready.wait(timeout=5)
-        rmsg: npt.NDArray = receiver.interpreted_data
+        rmsg: np.NDArray = receiver.interpreted_data
         if rmsg is None:
             return False
 
