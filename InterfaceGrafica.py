@@ -11,7 +11,7 @@ import threading
 # change 'em midway too, if needed. Huh.
 GUI_SMPLCNT = 25                # Sample count
 GUI_F1 = 3                      # Frequency 1
-GUI_F2 = 7                      # Frequency 1
+GUI_F2 = 7                      # Frequency 2
 GUI_AMP = 60                    # Signal Amplitude
 
 GUI_NRZ = "NZR-Polar"
@@ -51,23 +51,22 @@ class Programa(Gtk.Window):
         self.framing_section()
         self.errordetct_section()
         self.errorcurve_section()
+        self.extraparam_smpls()
 
         # Run() button
         self.run_button = Gtk.Button(label="Executar Simulação")
         self.run_button.connect("clicked", self.on_run_clicked)
-        self.grid.attach(self.run_button, 12, 0, 1, 2)
+        self.grid.attach(self.run_button, 9, 0, 2, 2)
         
     def input_section(self):
         # Message input area
-        input_label = Gtk.Label(label="v Mensagem a Enviar v")
-        self.grid.attach(input_label, 0, 0, 2, 1)
         self.input_message = Gtk.Entry()
-        self.input_message.set_placeholder_text("Digite aqui!")
-        self.grid.attach(self.input_message, 0, 1, 2, 1)
+        self.input_message.set_placeholder_text("Mensagem!")
+        self.grid.attach(self.input_message, 0, 0, 2, 2)
         
     def digmod_section(self):
         # Digital modulation options
-        digital_label = Gtk.Label(label="Modulação Digital:")
+        digital_label = Gtk.Label(label="Modulação Digital ->")
         self.grid.attach(digital_label, 3, 0, 1, 1)
         
         self.digmod_option = Gtk.ComboBoxText()
@@ -79,7 +78,7 @@ class Programa(Gtk.Window):
         
     def algmod_section(self):
         # Analog modulation options
-        analog_label = Gtk.Label(label="Modulação por Portadora:")
+        analog_label = Gtk.Label(label="Modulação por Portadora ->")
         self.grid.attach(analog_label, 3, 1, 1, 1)
         
         self.algmod_option = Gtk.ComboBoxText()
@@ -93,7 +92,7 @@ class Programa(Gtk.Window):
         
     def framing_section(self):
         # Framing options
-        framing_label = Gtk.Label(label="Enquadramento:")
+        framing_label = Gtk.Label(label="Enquadramento ->")
         self.grid.attach(framing_label, 6, 0, 1, 1)
         
         self.framing_option = Gtk.ComboBoxText()
@@ -105,7 +104,7 @@ class Programa(Gtk.Window):
     
     def errordetct_section(self):
         # Error detection options
-        error_label = Gtk.Label(label="Detecção de Erros:")
+        error_label = Gtk.Label(label="Detecção de Erros ->")
         self.grid.attach(error_label, 6, 1, 1, 1)
 
         self.errordetct_option = Gtk.ComboBoxText()
@@ -118,18 +117,48 @@ class Programa(Gtk.Window):
     def errorcurve_section(self):
         # Error curve parameters
         errorcurve_label = Gtk.Label(label="----->\nRuído\n----->")
-        self.grid.attach(errorcurve_label, 9, 0, 1, 2)
+        self.grid.attach(errorcurve_label, 6, 2, 1, 2)
 
         self.error_mean = Gtk.Entry()
-        self.error_mean.set_placeholder_text("Média (μ = 0)")
-        self.grid.attach(self.error_mean, 10, 0, 2, 1)
+        self.error_mean.set_placeholder_text("Média (Volts=0)")
+        self.grid.attach(self.error_mean, 7, 2, 2, 1)
 
         self.error_variance = Gtk.Entry()
-        self.error_variance.set_placeholder_text("Variância (σ² = 1)")
-        self.grid.attach(self.error_variance, 10, 1, 2, 1)
+        self.error_variance.set_placeholder_text("Variância (Volts=1)")
+        self.grid.attach(self.error_variance, 7, 3, 2, 1)
+        pass
+        
+    def extraparam_smpls(self):
+        # Sampling parameters
+        extra_label = Gtk.Label(label="--------------->\nAmostragem\n--------------->")
+        self.grid.attach(extra_label, 0, 2, 2, 2)
+
+        self.extprm_sample = Gtk.Entry()
+        self.extprm_sample.set_placeholder_text("Samples (25)")
+        self.grid.attach(self.extprm_sample, 2, 2, 2, 1)
+
+        self.extprm_amp = Gtk.Entry()
+        self.extprm_amp.set_placeholder_text("Amplitude (Volts=60)")
+        self.grid.attach(self.extprm_amp, 2, 3, 2, 1)
+
+        self.extprm_f1 = Gtk.Entry()
+        self.extprm_f1.set_placeholder_text("f1 (Hz=3)")
+        self.grid.attach(self.extprm_f1, 4, 2, 2, 1)
+        self.extprm_f2 = Gtk.Entry()
+        self.extprm_f2.set_placeholder_text("f2 (Hz=7)")
+        self.grid.attach(self.extprm_f2, 4, 3, 2, 1)
+
+        extra_label = Gtk.Label(label="Paridade ímpar")
+        self.grid.attach(extra_label, 9, 2, 1, 1)
+        self.extprm_podd = Gtk.CheckButton()
+        self.grid.attach(self.extprm_podd, 10, 2, 1, 1)
+
+
+
 
     def on_run_clicked(self, button):
         # Get all configurations and verify their validity
+        global GUI_AMP, GUI_SMPLCNT, GUI_F1, GUI_F2
         message = self.input_message.get_text()
         if not message.isascii() or message == "":
             print('Invalid message! Must be ASCII!')
@@ -163,14 +192,71 @@ class Programa(Gtk.Window):
             print("Variance must be a positive float!")
             return
 
+        smpl_cnt = self.extprm_sample.get_text()
+        try:
+            if smpl_cnt == "":
+                smpl_cnt = 25
+            else:
+                smpl_cnt = int(smpl_cnt)
+            
+            if smpl_cnt <= 0:
+                raise ValueError
+            GUI_SMPLCNT = smpl_cnt
+        except ValueError:
+            print("Sample count must be a positive integer!")
+            return
+
+        amp_val = self.extprm_amp.get_text()
+        try:
+            if amp_val == "":
+                amp_val = 60
+            else:
+                amp_val = float(amp_val)
+
+            GUI_AMP = amp_val
+        except ValueError:
+            print("Amplitude must be a float!")
+            return
+
+        f1_val = self.extprm_f1.get_text()
+        try:
+            if f1_val == "":
+                f1_val = 3
+            else:
+                f1_val = float(f1_val)
+            
+            if smpl_cnt <= 0:
+                raise ValueError
+            GUI_F1 = f1_val
+        except ValueError:
+            print("Frequency must be a non-null positive float!")
+            return
+
+        f2_val = self.extprm_f2.get_text()
+        try:
+            if f2_val == "":
+                f2_val = 7
+            else:
+                f2_val = float(f2_val)
+            
+            if smpl_cnt <= 0:
+                raise ValueError
+            GUI_F2 = f2_val
+        except ValueError:
+            print("Frequency must be a non-null positive float!")
+            return
+
+        parity_status = self.extprm_podd.get_active()
+
         if not self.run(message,
                         digital_mod,
                         analog_mod,
                         framing_method,
                         error_method,
                         errorcurve_mean,
-                        errorcurve_variance):
-            print("Something went TERRIBLY wrong")
+                        errorcurve_variance,
+                        parity_status):
+            self.text_show("Algo aconteceu de errado durante o processamento. Tarefa abortada.")
         
     def run(self,
             message, 
@@ -179,7 +265,8 @@ class Programa(Gtk.Window):
             framing_method,
             error_method,
             errorcurve_mean,
-            errorcurve_variance) -> bool:
+            errorcurve_variance,
+            parity_status) -> bool:
         import CamadaEnlace as ce
         import CamadaFisica as cf
         import Receptor     as rp
@@ -187,11 +274,19 @@ class Programa(Gtk.Window):
         import utils
         import time
 
+        textdisp = ""
+
+        textdisp += "========= MENSAGEM INICIAL ==========\n"
+        textdisp += message
+        textdisp += "\n\n"
+
         dmsg: list[bool] = utils.string_to_bitstream(message)
         if dmsg is None:
             return False
 
-        # utils.logmsg(str(dmsg))
+        textdisp += "========= BITSTREAM DA MENSAGEM ==========\n"
+        textdisp += np.array2string(np.array(dmsg, dtype='bool'), max_line_width=70, threshold=len(dmsg)+1)
+        textdisp += "\n\n"
         
         # Digital encoding
         dmmsg: np.NDArray = np.empty(0)
@@ -207,6 +302,9 @@ class Programa(Gtk.Window):
             return False
         self.digital_plot(dmmsg, "Modulação digital")
 
+        textdisp += "========= MODULAÇÃO DIGITAL ==========\n"
+        textdisp += np.array2string(np.array(dmmsg, dtype='bool'), max_line_width=70, threshold=len(dmmsg)+1)
+        textdisp += "\n\n"
 
         # Analog modulation of only the dsignal, no noise, no framing
         auxmsg: np.NDArray = np.empty(0)
@@ -224,6 +322,9 @@ class Programa(Gtk.Window):
             return False
         self.analog_plot(auxmsg, "Apenas mensagem, sem enlace ou ruído")
 
+        textdisp += "========= MODULAÇÃO ANALÓGICA MENSAGEM ==========\n"
+        textdisp += np.array2string(auxmsg, max_line_width=70, threshold=len(auxmsg)+1)
+        textdisp += "\n\n"
 
         # Framing type
         if framing_method == GUI_CONTAGEM:
@@ -252,7 +353,7 @@ class Programa(Gtk.Window):
         if dmsg is None: return False
         dmsg = ce.add_padding_and_padding_size(dmsg, PAYLOADSIZE)
         if dmsg is None: return False
-        dmsg = ce.add_EDC(dmsg, error_type)
+        dmsg = ce.add_EDC(dmsg, error_type, odd=parity_status)
         if dmsg is None: return False
         dmsg = ce.add_ECC(dmsg)
         if dmsg is None: return False
@@ -262,6 +363,10 @@ class Programa(Gtk.Window):
         if dmsg is None: return False
         dmsg = ce.add_padding_for_4bit_alignment(dmsg)
         if dmsg is None: return False
+
+        textdisp += "========= CAMADA DE ENLACE ==========\n"
+        textdisp += np.array2string(np.array(dmsg, dtype='bool'), max_line_width=70, threshold=len(dmsg)+1)
+        textdisp += "\n\n"
 
         # Creates and starts receiver at a different thread
         # This is necessary for the asynchronous socket implementation
@@ -286,11 +391,19 @@ class Programa(Gtk.Window):
             return False
         if amsg is None:
             return False
+
+        textdisp += "========= MODULAÇÃO ANALÓGICA COMPLETA ==========\n"
+        textdisp += np.array2string(amsg, max_line_width=70, threshold=len(amsg)+1)
+        textdisp += "\n\n"
         
         # Add noise
         amsg = utils.samples_addnoise(amsg, average=errorcurve_mean, spread=errorcurve_variance)
         if amsg is None:
             return False
+
+        textdisp += "========= RUÍDO ==========\n"
+        textdisp += np.array2string(amsg, max_line_width=70, threshold=len(amsg)+1)
+        textdisp += "\n\n"
 
         # Send message
         if not tm.send_to_server(amsg):
@@ -301,6 +414,10 @@ class Programa(Gtk.Window):
         rmsg: np.NDArray = receiver.interpreted_data
         if rmsg is None:
             return False
+
+        textdisp += "========= SINAL RECEBIDO ==========\n"
+        textdisp += np.array2string(rmsg, max_line_width=70, threshold=len(rmsg)+1)
+        textdisp += "\n\n"
 
         # Display received signal
         self.analog_plot(rmsg, "Sinal recebido enlaçado")
@@ -320,7 +437,11 @@ class Programa(Gtk.Window):
             return False
         if rmsg is None:
             return False
-        
+
+        textdisp += "========= SINAL DIGITALIZADO ==========\n"
+        textdisp += np.array2string(np.array(rmsg, dtype='bool'), max_line_width=70, threshold=len(rmsg)+1)
+        textdisp += "\n\n"
+
         #Remove 4bit padding from message
         rmsg = ce.remove_padding_for_4bit_alignment(rmsg)
 
@@ -332,10 +453,12 @@ class Programa(Gtk.Window):
         # Remove ECC
         rmsg = ce.remove_ECC(rmsg)
         # Find corrupted frames
-        corrupted_frames =  ce.find_corrupted_frames(rmsg, error_type)
-        print(f"Found {len(corrupted_frames)} corrupted frames.")
+        corrupted_frames = ce.find_corrupted_frames(rmsg, error_type, odd=parity_status)
+        textdisp += "========= PACOTES CORROMPIDOS ==========\n"
+        textdisp += f"Encontrados {len(corrupted_frames)} pacotes corrompidos pelo EDC."
         if corrupted_frames:
-            print("Corrupted frames:", corrupted_frames)
+            textdisp += f"Pacotes corrompidos: {corrupted_frames}"
+        textdisp += "\n\n"
         # Remove EDC
         rmsg = ce.remove_EDC(rmsg, error_type)
         if rmsg is None: return False
@@ -346,20 +469,28 @@ class Programa(Gtk.Window):
         rmsg = ce.list_linearize(rmsg)
         if rmsg is None: return False
 
+        textdisp += "========= SINAL DECODIFICADO ==========\n"
+        textdisp += np.array2string(np.array(rmsg, dtype='bool'), max_line_width=70, threshold=len(rmsg)+1)
+        textdisp += "\n\n"
+
         # Display analyzed bitstream
         self.digital_plot(rmsg, "Mensagem decodificada")
 
         # Display message
-        print("Message:")
-        print(utils.bitstream_to_string(rmsg))
+        textdisp += "========= MENSAGEM FINAL ==========\n"
+        textdisp += utils.bitstream_to_string(rmsg)
+        textdisp += "\n\n"
         
+        # Display text
+        self.text_show(textdisp)
+
         # Everything went right!
         return True
 
     def analog_plot(self, signal, title):
         mod = self.algmod_option.get_active_text()
-        graph = plt.Figure(figsize=(5, 3), dpi=100)
-        ax = graph.add_subplot(111)
+        graph = plt.Figure()
+        ax = graph.add_subplot()
         ax.plot(signal)
         ax.set_title(f"Sinal Analógico")
         ax.set_xlabel("Amostras")
@@ -372,8 +503,8 @@ class Programa(Gtk.Window):
         win.show_all()
 
     def digital_plot(self, dsignal, title):
-        graph = plt.Figure(figsize=(5, 3), dpi=100)
-        ax = graph.add_subplot(111)
+        graph = plt.Figure()
+        ax = graph.add_subplot()
 
         mod = self.digmod_option.get_active_text()
         
@@ -395,6 +526,16 @@ class Programa(Gtk.Window):
         canvas.set_size_request(800, 400)
         win = Gtk.Window(title=f"Digital - {title}")
         win.add(canvas)
+        win.show_all()
+
+    def text_show(self, message):
+        # Text display
+        label = Gtk.Label(label=message)
+        scrlb = Gtk.ScrolledWindow()
+        scrlb.add(label)
+        scrlb.set_size_request(600, 600)
+        win = Gtk.Window(title=f"Output de texto")
+        win.add(scrlb)
         win.show_all()
 
 
