@@ -32,6 +32,8 @@ GUI_PBIT = "Bit de Paridade"
 GUI_CHKSM = "Checksum"
 GUI_CRC32 = "CRC-32"
 
+GUI_PAYLOADSIZE = 32
+
 class Programa(Gtk.Window):
     def __init__(self):
         Gtk.Window.__init__(self, title="Simulador de Camadas Física e Enlace")
@@ -153,15 +155,19 @@ class Programa(Gtk.Window):
         self.extprm_podd = Gtk.CheckButton()
         self.grid.attach(self.extprm_podd, 10, 2, 1, 1)
 
+        self.extprm_ps = Gtk.Entry()
+        self.extprm_ps.set_placeholder_text("Payloadsize=32")
+        self.grid.attach(self.extprm_ps, 9, 3, 2, 1)
+
 
 
 
     def on_run_clicked(self, button):
         # Get all configurations and verify their validity
-        global GUI_AMP, GUI_SMPLCNT, GUI_F1, GUI_F2
+        global GUI_AMP, GUI_SMPLCNT, GUI_F1, GUI_F2, GUI_PAYLOADSIZE
         message = self.input_message.get_text()
         if not message.isascii() or message == "":
-            print('Invalid message! Must be ASCII!')
+            self.text_show('Mensagem inválida!\nDeve conter apenas ASCII.')
             return
 
         digital_mod: str = self.digmod_option.get_active_text()
@@ -176,7 +182,7 @@ class Programa(Gtk.Window):
             else:
                 errorcurve_mean = float(errorcurve_mean)
         except ValueError:
-            print("Mean must be a float!")
+            self.text_show("Média deve ser um float!")
             return
 
         errorcurve_variance: float = self.error_variance.get_text()
@@ -189,7 +195,7 @@ class Programa(Gtk.Window):
             if errorcurve_variance < 0:
                 raise ValueError
         except ValueError:
-            print("Variance must be a positive float!")
+            self.text_show("Variância deve ser um float positivo!")
             return
 
         smpl_cnt = self.extprm_sample.get_text()
@@ -203,7 +209,7 @@ class Programa(Gtk.Window):
                 raise ValueError
             GUI_SMPLCNT = smpl_cnt
         except ValueError:
-            print("Sample count must be a positive integer!")
+            self.text_show("Quantidade de samples deve ser um inteiro positivo!")
             return
 
         amp_val = self.extprm_amp.get_text()
@@ -215,7 +221,7 @@ class Programa(Gtk.Window):
 
             GUI_AMP = amp_val
         except ValueError:
-            print("Amplitude must be a float!")
+            self.text_show("Amplitude deve ser um float!")
             return
 
         f1_val = self.extprm_f1.get_text()
@@ -225,11 +231,11 @@ class Programa(Gtk.Window):
             else:
                 f1_val = float(f1_val)
             
-            if smpl_cnt <= 0:
+            if f1_val <= 0:
                 raise ValueError
             GUI_F1 = f1_val
         except ValueError:
-            print("Frequency must be a non-null positive float!")
+            self.text_show("Frequências devem ser floats positivos não-nulos!")
             return
 
         f2_val = self.extprm_f2.get_text()
@@ -239,14 +245,30 @@ class Programa(Gtk.Window):
             else:
                 f2_val = float(f2_val)
             
-            if smpl_cnt <= 0:
+            if f2_val <= 0:
                 raise ValueError
             GUI_F2 = f2_val
         except ValueError:
-            print("Frequency must be a non-null positive float!")
+            self.text_show("Frequências devem ser floats positivos não-nulos!")
             return
 
         parity_status = self.extprm_podd.get_active()
+
+        ps_val = self.extprm_ps.get_text()
+        try:
+            if ps_val == "":
+                ps_val = 32
+            else:
+                ps_val = int(ps_val)
+            
+            if ps_val <= 0:
+                raise ValueError
+            if ps_val % 2 == 1:
+                raise ValueError
+            GUI_PAYLOADSIZE = ps_val
+        except ValueError:
+            self.text_show("Payloadsize deve ser um inteiro positivo divisível por 2!")
+            return
 
         if not self.run(message,
                         digital_mod,
@@ -267,6 +289,11 @@ class Programa(Gtk.Window):
             errorcurve_mean,
             errorcurve_variance,
             parity_status) -> bool:
+        global GUI_SMPLCNT, GUI_F1, GUI_F2, GUI_AMP, GUI_NRZ, GUI_MAN
+        global GUI_BIP, GUI_ASK, GUI_FSK, GUI_BPSK, GUI_QPSK, GUI_16QAM
+        global GUI_CONTAGEM, GUI_FLAGBYTE, GUI_FLAGBIT, GUI_PBIT, GUI_CHKSM
+        global GUI_CRC32, GUI_PAYLOADSIZE
+        
         import CamadaEnlace as ce
         import CamadaFisica as cf
         import Receptor     as rp
@@ -348,10 +375,9 @@ class Programa(Gtk.Window):
 
 
         # Apply Framing Protocol + Error Detection Protocol
-        PAYLOADSIZE = 32
-        dmsg = ce.split_bitstream_into_payloads(dmsg, PAYLOADSIZE)
+        dmsg = ce.split_bitstream_into_payloads(dmsg, GUI_PAYLOADSIZE)
         if dmsg is None: return False
-        dmsg = ce.add_padding_and_padding_size(dmsg, PAYLOADSIZE)
+        dmsg = ce.add_padding_and_padding_size(dmsg, GUI_PAYLOADSIZE)
         if dmsg is None: return False
         dmsg = ce.add_EDC(dmsg, error_type, odd=parity_status)
         if dmsg is None: return False
