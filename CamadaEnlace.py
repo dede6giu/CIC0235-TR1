@@ -130,28 +130,28 @@ def split_bitstream_into_payloads(bitstream: List[bool], payload_size: int) -> L
 
     return payloads
 
-def add_padding_and_padding_size(payloads: List[List[bool]], payload_size: int) -> List[List[bool]]:
+def add_padding_and_padding_size(payloads: List[List[bool]]) -> List[List[bool]]:
     """
-    Adds zero-padding to the last payload so that it reaches the desired payload size,
-    then appends a new payload containing the padding size (encoded in bits).
+    Adds zero-padding to the last payload so that its length is a multiple of 2 (checksum requirement) 
+    and then appends a new payload containing the padding size (encoded in bits).
 
     Args:
         payloads (List[List[bool]]): List of payloads (each a list of bits).
-        payload_size (int): Desired fixed size for each payload.
+        payload_size (int): Maximum size for each payload.
 
     Returns:
         List[List[bool]]: Updated list of payloads including padding and padding size info.
     """
 
     # Compute how many bits are missing in the last payload to reach the target size
-    padding_size: int = payload_size - len(payloads[-1])
+    padding_size: int = len(payloads[-1]) % 2
 
-    # Append 'False' (0) bits as padding to the last payload
-    for _ in range(padding_size):
+    # Append 'False' (0) bit as padding to the last payload
+    if padding_size:
         payloads[-1].append(False)
 
     # Convert padding size to a list of bits (same size as a payload)
-    padding_size_bits: List[bool] = int_to_bool_list(num=padding_size, size=payload_size)
+    padding_size_bits: List[bool] = int_to_bool_list(num=padding_size, size=2)
 
     # Append this new payload (representing the padding size) to the list
     payloads.append(padding_size_bits)
@@ -221,7 +221,6 @@ def add_ECC(payloads: List[List[bool]]) -> List[List[bool]]:
     for i, payload in enumerate(payloads):
         # Replace each payload with its ECC-extended version.
         payloads[i] = hamming_insert(payload)
-
     return payloads
 
 
@@ -259,7 +258,6 @@ def add_framing_protocol(payloads_with_edc: List[List[bool]], fp: FP) -> List[Li
         case _:
             # Default case: no framing applied
             pass
-
     return payloads_with_edc
 
 def list_linearize(ilist: list[list[bool]]) -> list[bool]:
@@ -314,7 +312,6 @@ def add_padding_for_4bit_alignment(bitstream: List[bool]) -> List[bool]:
 
     # Append the 4-bit representation of the padding size.
     bitstream.extend(padding_size_bits)
-
     return bitstream
 
 def remove_padding_for_4bit_alignment(bitstream: List[bool]) -> List[bool]:
@@ -331,10 +328,11 @@ def remove_padding_for_4bit_alignment(bitstream: List[bool]) -> List[bool]:
         List[bool]:
             The bitstream with the padding bits and the 4-bit padding-size field removed.
     """
-
     # Read the last 4 bits and convert them into an integer.
     # These bits specify how many padding bits were added.
     padding_size = bool_list_to_int(bitstream[-4:])
+    # If padding_size is larger than 3, we know the bits were corrupted
+    padding_size = 0 if padding_size > 3 else padding_size
 
     # Remove the 4-bit padding-size field.
     del bitstream[-4:]
@@ -379,7 +377,6 @@ def remove_framing_protocol(bitstream: List[bool], fp: FP) -> List[List[bool]]:
         case _:
             # No framing removal performed if protocol not recognized
             pass
-
     return frame_bodies
 
 def ECC_fix_corrupted_bits(payloads: List[List[bool]]) -> List[List[bool]]:
@@ -518,7 +515,7 @@ def remove_EDC(frame_bodies: List[List[bool]], edp: EDP, k: int = 2) -> List[Lis
 
     return frame_bodies
 
-def remove_paddings(payloads: List[List[bool]]) -> List[List[bool]]:
+def remove_paddings(payloads: List[List[bool]], last_frame_corrupted: bool) -> List[List[bool]]:
     """
     Removes zero-padding from the last payload in a list of payloads.
 
@@ -533,50 +530,18 @@ def remove_paddings(payloads: List[List[bool]]) -> List[List[bool]]:
     Returns:
         List[List[bool]]: List of payloads with the padding removed.
     """
-
     # Retrieve and decode the last payload, which stores the padding size
-    if payloads and payloads[-1]:
-        padding_size: int = bool_list_to_int(payloads.pop())
-    else:
-        padding_size = 0
+    padding_size = 0
+    if len(payloads) > 1 and len(payloads[-1]) == 2 and not(last_frame_corrupted):
+        padding_size: int = 1 if payloads.pop()[1] else 0
 
     # Remove 'padding_size' bits from the end of the last real payload
     if padding_size:
         if payloads:
             if payloads[-1]:
-                payloads[-1] = payloads[-1][:-padding_size]
-
+                payloads[-1].pop()
     # Return the list without the padding information payload
     return payloads
-
-
-
-def list_pack(ilist: list[bool], k: int) -> list[list[bool]]:
-    """
-    Receives a linear list and breaks it into equal sectors of k items, making it 2D.
-    If the value k is not a divisor of len(ilist), then this returns None.
-    
-    Args:
-        ilist (list[bool]): Input list
-        k (int): Amount of items per list on new 2d-list
-
-    Returns:
-        list[bool]: 2D list with k-items lists
-    """
-    if len(ilist) % k != 0:
-        return None
-    
-    result = []
-    aux = []
-    cnt = 0
-    for i in ilist:
-        aux.append(i)
-        cnt += 1
-        if cnt >= k:
-            result.append(aux)
-            aux = []
-            cnt = 0
-    return result
 
 
 def parity_insert(payload: list[bool], *,
@@ -857,8 +822,6 @@ def crc32_remove_EDC(frame_bits: List[bool]) -> List[bool]:
 
     return frame_bits[:-32]
 
-
-
 def hamming_insert(data_bits: List[bool]) -> List[bool]:
     """
     Inserts parity bits into a data bit sequence to form a Hamming codeword.
@@ -890,7 +853,7 @@ def hamming_insert(data_bits: List[bool]) -> List[bool]:
 
         # include 'step' bits, skip 'step' bits, include 'step' bits, and so on.
         for j in range(step, len(data_bits) + 1, step * 2):
-            # XOR all bits that this parity bit covers
+            # XOR all bits that this parity bit covers (xor represents binary sum)
             for bit in data_bits[j - 1 : j - 1 + step]:
                 parity ^= bit
 
@@ -1131,10 +1094,17 @@ def remove_8bit_padding(frame_body: List[bool]) -> List[bool]:
     """
 
     # Read the last 8 bits to obtain the padding length
+
+    if len(frame_body) <= 8: return frame_body
+
     padding_size = bool_list_to_int(frame_body[-8:])
 
     # Remove the padding-length field
     del frame_body[-8:]
+
+    # padding_size must be at most 7
+    # otherwise, we know it has been corrupted
+    if padding_size >= 8: return frame_body
 
     # Remove the actual padding bits
     for _ in range(padding_size):
@@ -1207,10 +1177,12 @@ def remove_char_count_flag_from_bitstream(bitstream: List[bool]) -> List[List[bo
 
         # Attempt to read the padding-size byte
         if i + 8 * num_of_bytes <= len(bitstream):
-            padding_size = bool_list_to_int(
-                bitstream[i + 8 * num_of_bytes :
-                          min(i + 8 * num_of_bytes + 8, len(bitstream))]
-            )
+            padding_size = 0
+            if len(bitstream) > i + 8 * num_of_bytes:
+                padding_size = bool_list_to_int(
+                    bitstream[i + 8 * num_of_bytes :
+                              min(i + 8 * num_of_bytes + 8, len(bitstream))]
+                )
 
             # Remove padding bits if present
             for _ in range(padding_size):

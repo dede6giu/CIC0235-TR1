@@ -377,7 +377,7 @@ class Programa(Gtk.Window):
         # Apply Framing Protocol + Error Detection Protocol
         dmsg = ce.split_bitstream_into_payloads(dmsg, GUI_PAYLOADSIZE)
         if dmsg is None: return False
-        dmsg = ce.add_padding_and_padding_size(dmsg, GUI_PAYLOADSIZE)
+        dmsg = ce.add_padding_and_padding_size(dmsg)
         if dmsg is None: return False
         dmsg = ce.add_EDC(dmsg, error_type, odd=parity_status)
         if dmsg is None: return False
@@ -385,6 +385,7 @@ class Programa(Gtk.Window):
         if dmsg is None: return False
         dmsg = ce.add_framing_protocol(dmsg, enlace_type)
         if dmsg is None: return False
+        frames_num = len(dmsg)
         dmsg = ce.list_linearize(dmsg)
         if dmsg is None: return False
         dmsg = ce.add_padding_for_4bit_alignment(dmsg)
@@ -481,15 +482,19 @@ class Programa(Gtk.Window):
         # Find corrupted frames
         corrupted_frames = ce.find_corrupted_frames(rmsg, error_type, odd=parity_status)
         textdisp += "========= PACOTES CORROMPIDOS ==========\n"
-        textdisp += f"Encontrados {len(corrupted_frames)} pacotes corrompidos pelo EDC."
+        textdisp += "Número de pacotes enviados: " + str(frames_num) + "\n"
+        textdisp += "Número de pacotes recebidos: " + str(len(rmsg)) + "\n"
+        textdisp += f"Encontrados {len(corrupted_frames)} pacotes corrompidos pelo EDC.\n"
         if corrupted_frames:
             textdisp += f"Pacotes corrompidos: {corrupted_frames}"
         textdisp += "\n\n"
+        #Verifies if last frame is corrupted
+        last_frame_corrupted = corrupted_frames[-1] == len(rmsg) if corrupted_frames else 0
         # Remove EDC
         rmsg = ce.remove_EDC(rmsg, error_type)
         if rmsg is None: return False
         # Remove padding
-        rmsg = ce.remove_paddings(rmsg)
+        rmsg = ce.remove_paddings(rmsg, last_frame_corrupted)
         if rmsg is None: return False
         # Flatten final result
         rmsg = ce.list_linearize(rmsg)
@@ -504,6 +509,9 @@ class Programa(Gtk.Window):
 
         # Display message
         textdisp += "========= MENSAGEM FINAL ==========\n"
+        # Guarantees message size is divisible by 8
+        # Otherwise, it can't be converted to ascii
+        rmsg += [False for _ in range((8 - (len(rmsg) % 8)) % 8)]
         textdisp += utils.bitstream_to_string(rmsg)
         textdisp += "\n\n"
         
