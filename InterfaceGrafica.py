@@ -349,9 +349,9 @@ class Programa(Gtk.Window):
             return False
         self.analog_plot(auxmsg, "Apenas mensagem, sem enlace ou ruído")
 
-        textdisp += "========= MODULAÇÃO ANALÓGICA MENSAGEM ==========\n"
-        textdisp += np.array2string(auxmsg, max_line_width=70, threshold=len(auxmsg)+1)
-        textdisp += "\n\n"
+        # textdisp += "========= MODULAÇÃO ANALÓGICA MENSAGEM ==========\n"
+        # textdisp += np.array2string(auxmsg, max_line_width=70, threshold=len(auxmsg)+1)
+        # textdisp += "\n\n"
 
         # Framing type
         if framing_method == GUI_CONTAGEM:
@@ -385,7 +385,8 @@ class Programa(Gtk.Window):
         if dmsg is None: return False
         dmsg = ce.add_framing_protocol(dmsg, enlace_type)
         if dmsg is None: return False
-        frames_num = len(dmsg)
+        # Saves number of sent frames
+        sent_frames_count = len(dmsg)
         dmsg = ce.list_linearize(dmsg)
         if dmsg is None: return False
         dmsg = ce.add_padding_for_4bit_alignment(dmsg)
@@ -419,18 +420,18 @@ class Programa(Gtk.Window):
         if amsg is None:
             return False
 
-        textdisp += "========= MODULAÇÃO ANALÓGICA COMPLETA ==========\n"
-        textdisp += np.array2string(amsg, max_line_width=70, threshold=len(amsg)+1)
-        textdisp += "\n\n"
+        # textdisp += "========= MODULAÇÃO ANALÓGICA COMPLETA ==========\n"
+        # textdisp += np.array2string(amsg, max_line_width=70, threshold=len(amsg)+1)
+        # textdisp += "\n\n"
         
         # Add noise
         amsg = utils.samples_addnoise(amsg, average=errorcurve_mean, spread=errorcurve_variance)
         if amsg is None:
             return False
 
-        textdisp += "========= RUÍDO ==========\n"
-        textdisp += np.array2string(amsg, max_line_width=70, threshold=len(amsg)+1)
-        textdisp += "\n\n"
+        # textdisp += "========= RUÍDO ==========\n"
+        # textdisp += np.array2string(amsg, max_line_width=70, threshold=len(amsg)+1)
+        # textdisp += "\n\n"
 
         # Send message
         if not tm.send_to_server(amsg):
@@ -442,9 +443,9 @@ class Programa(Gtk.Window):
         if rmsg is None:
             return False
 
-        textdisp += "========= SINAL RECEBIDO ==========\n"
-        textdisp += np.array2string(rmsg, max_line_width=70, threshold=len(rmsg)+1)
-        textdisp += "\n\n"
+        # textdisp += "========= SINAL RECEBIDO ==========\n"
+        # textdisp += np.array2string(rmsg, max_line_width=70, threshold=len(rmsg)+1)
+        # textdisp += "\n\n"
 
         # Display received signal
         self.analog_plot(rmsg, "Sinal recebido enlaçado")
@@ -481,13 +482,8 @@ class Programa(Gtk.Window):
         rmsg = ce.remove_ECC(rmsg)
         # Find corrupted frames
         corrupted_frames = ce.find_corrupted_frames(rmsg, error_type, odd=parity_status)
-        textdisp += "========= PACOTES CORROMPIDOS ==========\n"
-        textdisp += "Número de pacotes enviados: " + str(frames_num) + "\n"
-        textdisp += "Número de pacotes recebidos: " + str(len(rmsg)) + "\n"
-        textdisp += f"Encontrados {len(corrupted_frames)} pacotes corrompidos pelo EDC.\n"
-        if corrupted_frames:
-            textdisp += f"Pacotes corrompidos: {corrupted_frames}"
-        textdisp += "\n\n"
+        # Saves number of received frames
+        received_frames_count = len(rmsg)
         #Verifies if last frame is corrupted
         last_frame_corrupted = corrupted_frames[-1] == len(rmsg) if corrupted_frames else 0
         # Remove EDC
@@ -507,8 +503,16 @@ class Programa(Gtk.Window):
         # Display analyzed bitstream
         self.digital_plot(rmsg, "Mensagem decodificada")
 
+        textdisp += "=========== QUADROS INFO =============\n"
+        textdisp += "Número de quadros enviados: " + str(sent_frames_count) + "\n"
+        textdisp += "Número de quadros recebidos: " + str(received_frames_count) + "\n"
+        textdisp += f"Encontrados {len(corrupted_frames)} quadros corrompidos pelo EDC.\n"
+        if corrupted_frames:
+            textdisp += f"Quadros corrompidos: {corrupted_frames}"
+        textdisp += "\n\n"
+
         # Display message
-        textdisp += "========= MENSAGEM FINAL ==========\n"
+        textdisp += "========= MENSAGEM FINAL =============\n"
         # Guarantees message size is divisible by 8
         # Otherwise, it can't be converted to ascii
         rmsg += [False for _ in range((8 - (len(rmsg) % 8)) % 8)]
