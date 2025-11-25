@@ -7,7 +7,7 @@ from enum import Enum
 """
 ============= ORDER OF USAGE =============
 
-Framing
+Transmitter
 1. split_bitstream_into_payloads
 2. add_padding_and_padding_size
 3. add_EDC
@@ -16,7 +16,7 @@ Framing
 6. list_linearize
 7. add_padding_for_4bit_alignment
 
-Deframing
+Receiver
 1. Remove_padding_for_4bit_alignment
 2. remove_framing_protocol
 3. ECC_fix_corrupted_bits
